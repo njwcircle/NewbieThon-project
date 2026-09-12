@@ -13,17 +13,30 @@ const ROLES = [
 
 export default function SignupPage() {
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const { signup } = useAuth()
   const [role, setRole] = useState('TENANT')
   const [form, setForm] = useState({ name: '', phone: '', password: '', confirm: '' })
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value })
+
   const mismatch = form.confirm.length > 0 && form.password !== form.confirm
+  const tooShort = form.password.length > 0 && form.password.length < 8
+  const ready = form.name && form.phone && form.password.length >= 8 && form.password === form.confirm
 
   // 임차인은 가입 직후 계약이 없으므로 AppLayout이 /invite로 보냅니다.
-  const submit = () => {
-    login(role)
-    navigate('/', { replace: true })
+  const submit = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      await signup(role, form.name, form.phone, form.password)
+      navigate('/', { replace: true })
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -53,6 +66,7 @@ export default function SignupPage() {
           placeholder="8자 이상 입력하세요"
           value={form.password}
           onChange={set('password')}
+          error={tooShort ? '비밀번호는 8자 이상이어야 해요' : ''}
         />
         <TextField
           label="비밀번호 확인"
@@ -60,15 +74,18 @@ export default function SignupPage() {
           placeholder="비밀번호를 한 번 더 입력하세요"
           value={form.confirm}
           onChange={set('confirm')}
-          error={mismatch ? '비밀번호가 일치하지 않아요' : ''}
+          error={mismatch ? '비밀번호가 일치하지 않아요' : error}
         />
-        <Button full onClick={submit}>
-          가입하기
+        <Button full disabled={!ready || loading} onClick={submit}>
+          {loading ? '가입 중…' : '가입하기'}
         </Button>
       </div>
 
       <p className="auth-footer">
-        이미 계정이 있으신가요? <Link to="/login"><strong>로그인</strong></Link>
+        이미 계정이 있으신가요?{' '}
+        <Link to="/login">
+          <strong>로그인</strong>
+        </Link>
       </p>
     </div>
   )

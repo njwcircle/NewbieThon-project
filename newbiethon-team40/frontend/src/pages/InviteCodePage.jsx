@@ -1,33 +1,34 @@
 import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { useData } from '../store'
+import { formatDate } from '../constants'
 import HeroHeader from '../components/HeroHeader'
 import Button from '../components/Button'
 
 export default function InviteCodePage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { units } = useData()
   const [copied, setCopied] = useState(false)
 
-  const unit = units.find((u) => u.unitId === location.state?.unitId)
-  if (!unit) return <Navigate to="/units" replace />
+  const { code, expiresAt, label } = location.state || {}
+  if (!code) return <Navigate to="/units" replace />
 
   const copy = () => {
-    navigator.clipboard?.writeText(unit.inviteCode)
+    navigator.clipboard?.writeText(code)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   return (
     <div className="page">
-      <HeroHeader title="등록 완료" subtitle={`${unit.buildingName} ${unit.ho}호 계약이 등록됐어요`} />
+      <HeroHeader title="등록 완료" subtitle={`${label} 계약이 등록됐어요`} />
 
       <div className="auth-form">
         <div className="code-display">
           <span className="contract-card-label">임차인 초대코드</span>
-          <span className="code-display-value">{unit.inviteCode}</span>
-          <span className="code-display-expire">발급일로부터 7일간 유효해요</span>
+          <span className="code-display-value">{code}</span>
+          <span className="code-display-expire">
+            {expiresAt ? `${formatDate(expiresAt.slice(0, 10))}까지 유효해요` : '발급일로부터 7일간 유효해요'}
+          </span>
         </div>
 
         <p className="result-note">

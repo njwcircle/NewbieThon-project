@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, useData } from '../store'
-import { CATEGORY, formatDate, formatWon } from '../mock/constants'
+import { CATEGORY, formatDate, formatWon } from '../constants'
 import ChipGroup from '../components/ChipGroup'
 import ListCard from '../components/ListCard'
 import StatusChip from '../components/StatusChip'
@@ -17,7 +17,7 @@ const FILTERS = [
 export default function IssueListPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { issues } = useData()
+  const { issues, loading } = useData()
   const [filter, setFilter] = useState('ALL')
 
   const isLandlord = user.role === 'LANDLORD'
@@ -44,7 +44,7 @@ export default function IssueListPage() {
         )}
 
         {list.length === 0 ? (
-          <EmptyState icon="🗂️" title="접수된 문제가 없어요" desc="새로운 문제가 접수되면 여기에 표시됩니다" />
+          <EmptyState icon="🗂️" title={loading ? '불러오는 중…' : '접수된 문제가 없어요'} desc={loading ? '' : '새로운 문제가 접수되면 여기에 표시됩니다'} />
         ) : (
           list.map((issue) => (
             <ListCard

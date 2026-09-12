@@ -25,15 +25,32 @@ export default function ContractNewPage() {
   const { user } = useAuth()
   const { addUnit } = useData()
   const [form, setForm] = useState(EMPTY)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   if (user.role !== 'LANDLORD') return <Navigate to="/" replace />
 
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value })
   const ready = REQUIRED.every((key) => form[key].trim() !== '')
 
-  const submit = () => {
-    const unit = addUnit(form)
-    navigate('/contracts/new/done', { replace: true, state: { unitId: unit.unitId } })
+  // 건물 → 호실 → 계약 → 초대코드 순으로 4번의 API 호출이 일어납니다.
+  const submit = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const created = await addUnit(form)
+      navigate('/contracts/new/done', {
+        replace: true,
+        state: {
+          code: created.inviteCode,
+          expiresAt: created.expiresAt,
+          label: `${form.buildingName.trim() || form.address.trim()} ${form.ho.trim()}호`,
+        },
+      })
+    } catch (e) {
+      setError(e.message)
+      setLoading(false)
+    }
   }
 
   return (
@@ -83,8 +100,10 @@ export default function ContractNewPage() {
 
         <p className="result-note">🔑 등록을 완료하면 임차인 초대코드가 발급돼요</p>
 
-        <Button full disabled={!ready} onClick={submit}>
-          계약 등록하기
+        {error && <p className="field-error">{error}</p>}
+
+        <Button full disabled={!ready || loading} onClick={submit}>
+          {loading ? '등록 중…' : '계약 등록하기'}
         </Button>
       </div>
 

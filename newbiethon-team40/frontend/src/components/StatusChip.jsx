@@ -1,4 +1,4 @@
-import { ISSUE_STATUS, UNIT_STATE, PAYMENT_STATUS } from '../mock/constants'
+import { ISSUE_STATUS, UNIT_STATE, PAYMENT_STATUS } from '../constants'
 
 // status 코드만 넘기면 라벨과 색을 알아서 찾습니다.
 // 예) <StatusChip status="RESOLVED" /> <StatusChip status="VACANT" />

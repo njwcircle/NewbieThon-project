@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth, useData } from '../store'
-import { formatWon, formatManwon, formatDate } from '../mock/constants'
-import { agreementNote } from '../mock/units'
+import { unitLabelOf } from '../api/data'
+import { CATEGORY, formatWon, formatManwon, formatDate } from '../constants'
 import HeroHeader from '../components/HeroHeader'
 import ListCard from '../components/ListCard'
 import StatusChip from '../components/StatusChip'
@@ -13,7 +13,7 @@ import Button from '../components/Button'
 import EmptyState from '../components/EmptyState'
 
 const unitMeta = (u) => {
-  const room = u.dong ? `${u.dong} ${u.ho}호` : `${u.ho}호`
+  const room = unitLabelOf(u).replace(`${u.buildingName} `, '')
   if (u.state === 'VACANT') return `${room} · 계약 없음`
   if (u.state === 'PENDING') return `${room} · 임차인 미연결`
   return `${room} · ${u.tenantName} · 월 ${formatManwon(u.rentAmount)}`
@@ -22,30 +22,38 @@ const unitMeta = (u) => {
 export default function UnitsPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { units, vendors, agreements, setVendors, setAgreements } = useData()
+  const { units, vendors, agreements, loading, saveVendors, saveAgreements, reissueInviteCode } = useData()
   const [selectedId, setSelectedId] = useState(null)
   const [vendorDraft, setVendorDraft] = useState(null)
   const [termDraft, setTermDraft] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [inviteCode, setInviteCode] = useState(null)
+  const [error, setError] = useState('')
+
+  if (user.role !== 'LANDLORD') return <Navigate to="/" replace />
 
   const unit = units.find((u) => u.unitId === selectedId) || null
-  if (user.role !== 'LANDLORD') return <Navigate to="/" replace />
-  const myVendors = unit ? vendors.filter((v) => v.contractId === unit.contractId) : []
+  const myVendors = unit ? vendors.filter((v) => v.buildingId === unit.buildingId) : []
   const myTerms = unit ? agreements.filter((a) => a.contractId === unit.contractId) : []
 
   const close = () => {
     setSelectedId(null)
     setVendorDraft(null)
     setTermDraft(null)
+    setInviteCode(null)
+    setError('')
   }
 
-  const saveVendors = () => {
-    setVendors((prev) => prev.map((v) => vendorDraft.find((d) => d.id === v.id) || v))
-    setVendorDraft(null)
-  }
-
-  const saveTerms = () => {
-    setAgreements((prev) => prev.map((a) => termDraft.find((d) => d.id === a.id) || a))
-    setTermDraft(null)
+  const run = async (fn) => {
+    setSaving(true)
+    setError('')
+    try {
+      await fn()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -59,21 +67,36 @@ export default function UnitsPage() {
         </button>
       </div>
 
-      <div className="page-body stack gap-12">
-        {units.map((u) => (
-          <ListCard
-            key={u.unitId}
-            title={u.buildingName}
-            meta={unitMeta(u)}
-            right={<StatusChip status={u.state} />}
-            onClick={() => setSelectedId(u.unitId)}
-          />
-        ))}
-      </div>
-
-      <p className="caption text-center mt-24" style={{ paddingBottom: 24 }}>
-        세대를 눌러 상세 정보를 확인하세요
-      </p>
+      {units.length === 0 ? (
+        <EmptyState
+          icon="🏠"
+          title={loading ? '불러오는 중…' : '등록된 세대가 없어요'}
+          desc={loading ? '' : '계약을 등록하면 여기에 표시됩니다'}
+        >
+          {!loading && (
+            <Button small onClick={() => navigate('/contracts/new')}>
+              계약 등록하기
+            </Button>
+          )}
+        </EmptyState>
+      ) : (
+        <>
+          <div className="page-body stack gap-12">
+            {units.map((u) => (
+              <ListCard
+                key={u.unitId}
+                title={u.buildingName}
+                meta={unitMeta(u)}
+                right={<StatusChip status={u.state} />}
+                onClick={() => setSelectedId(u.unitId)}
+              />
+            ))}
+          </div>
+          <p className="caption text-center mt-24" style={{ paddingBottom: 24 }}>
+            세대를 눌러 상세 정보를 확인하세요
+          </p>
+        </>
+      )}
 
       <BottomSheet
         open={!!unit}
@@ -85,27 +108,35 @@ export default function UnitsPage() {
           <>
             <div className="sheet-section stack gap-16" style={{ paddingBottom: 24 }}>
               <InfoRow label="임차인" value={unit.tenantName || '-'} />
-              <InfoRow label="연락처" value={unit.tenantPhone || '-'} />
               <InfoRow label="월세" value={formatWon(unit.rentAmount)} />
               <InfoRow label="관리비" value={formatWon(unit.maintenanceFeeFixed)} />
               <InfoRow
                 label="계약 기간"
-                value={
-                  unit.startDate ? `${formatDate(unit.startDate)} ~ ${formatDate(unit.endDate)}` : '-'
-                }
+                value={unit.startDate ? `${formatDate(unit.startDate)} ~ ${formatDate(unit.endDate)}` : '-'}
               />
-              <InfoRow
-                label="주소"
-                value={`${unit.address}${unit.dong ? ` ${unit.dong}` : ''} ${unit.ho}호`}
-              />
+              <InfoRow label="주소" value={unitLabelOf({ ...unit, buildingName: unit.address })} />
+              {unit.paymentStatus && <InfoRow label="납부 상태" value={<StatusChip status={unit.paymentStatus} />} />}
             </div>
 
             {unit.state === 'PENDING' && (
               <div className="sheet-section" style={{ paddingBottom: 8 }}>
                 <div className="code-display">
                   <span className="contract-card-label">임차인 초대코드</span>
-                  <span className="code-display-value">{unit.inviteCode}</span>
-                  <span className="code-display-expire">발급일로부터 7일간 유효해요</span>
+                  {inviteCode ? (
+                    <>
+                      <span className="code-display-value">{inviteCode}</span>
+                      <span className="code-display-expire">발급일로부터 7일간 유효해요</span>
+                    </>
+                  ) : (
+                    <Button
+                      small
+                      variant="outline"
+                      disabled={saving}
+                      onClick={() => run(async () => setInviteCode(await reissueInviteCode(unit)))}
+                    >
+                      {saving ? '발급 중…' : '초대코드 발급하기'}
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
@@ -127,7 +158,9 @@ export default function UnitsPage() {
                 <div className="stack" style={{ gap: 10 }}>
                   {(vendorDraft || myVendors).map((v, i) => (
                     <div key={v.id} className="vendor-row">
-                      <span className="vendor-category">{v.category}</span>
+                      <span className="vendor-category">
+                        {CATEGORY[v.category]} · {v.name}
+                      </span>
                       {vendorDraft ? (
                         <input
                           className="vendor-phone-input"
@@ -148,8 +181,13 @@ export default function UnitsPage() {
 
               {vendorDraft && (
                 <div className="edit-actions">
-                  <Button small full onClick={saveVendors}>
-                    저장
+                  <Button
+                    small
+                    full
+                    disabled={saving}
+                    onClick={() => run(async () => { await saveVendors(vendorDraft); setVendorDraft(null) })}
+                  >
+                    {saving ? '저장 중…' : '저장'}
                   </Button>
                 </div>
               )}
@@ -174,7 +212,7 @@ export default function UnitsPage() {
                       {termDraft ? (
                         <input
                           className="term-input"
-                          value={t.note}
+                          value={t.note || ''}
                           onChange={(e) => {
                             const next = [...termDraft]
                             next[i] = { ...t, note: e.target.value }
@@ -182,33 +220,33 @@ export default function UnitsPage() {
                           }}
                         />
                       ) : (
-                        <span>{t.note}</span>
+                        <span>
+                          [{CATEGORY[t.category]}] {t.note}
+                        </span>
                       )}
                     </div>
                   ))}
-                  <p className="term-note">{agreementNote}</p>
                 </div>
               )}
 
               {termDraft && (
                 <div className="edit-actions">
-                  <Button small full onClick={saveTerms}>
-                    저장
+                  <Button
+                    small
+                    full
+                    disabled={saving}
+                    onClick={() => run(async () => { await saveAgreements(termDraft); setTermDraft(null) })}
+                  >
+                    {saving ? '저장 중…' : '저장'}
                   </Button>
                 </div>
               )}
+
+              {error && <p className="field-error mt-16">{error}</p>}
             </div>
           </>
         )}
       </BottomSheet>
-
-      {units.length === 0 && (
-        <EmptyState icon="🏠" title="등록된 세대가 없어요" desc="계약을 등록하면 여기에 표시됩니다">
-          <Button small onClick={() => navigate('/contracts/new')}>
-            계약 등록하기
-          </Button>
-        </EmptyState>
-      )}
     </div>
   )
 }

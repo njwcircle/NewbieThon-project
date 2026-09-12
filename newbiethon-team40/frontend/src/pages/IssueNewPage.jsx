@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth, useData } from '../store'
-import { CATEGORY, CATEGORY_LIST } from '../mock/constants'
+import { CATEGORY, CATEGORY_LIST } from '../constants'
 import PageHeader from '../components/PageHeader'
 import ChipGroup from '../components/ChipGroup'
+import PhotoUpload from '../components/PhotoUpload'
+import { uploadIssueImage } from '../api/data'
 import Button from '../components/Button'
 
 const OPTIONS = CATEGORY_LIST.map((value) => ({ value, label: CATEGORY[value] }))
@@ -11,23 +13,26 @@ const OPTIONS = CATEGORY_LIST.map((value) => ({ value, label: CATEGORY[value] })
 export default function IssueNewPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { units, addIssue } = useData()
+  const { addIssue } = useData()
   const [category, setCategory] = useState(null)
   const [description, setDescription] = useState('')
+  const [photoUrl, setPhotoUrl] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   if (user.role !== 'TENANT') return <Navigate to="/" replace />
 
-  const unit = units.find((u) => u.contractId === user.contractId)
-
-  const submit = () => {
-    const issue = addIssue({
-      contractId: user.contractId,
-      unitLabel: unit ? `${unit.buildingName} ${unit.ho}호` : '',
-      category,
-      title: `${CATEGORY[category]} 문제`,
-      description,
-    })
-    navigate('/issues/new/done', { replace: true, state: { issueId: issue.id } })
+  // 사전합의 매칭 판단은 서버가 합니다. 결과를 그대로 다음 화면으로 넘깁니다.
+  const submit = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const result = await addIssue({ contractId: user.contractId, category, description, photoUrl })
+      navigate('/issues/new/done', { replace: true, state: result })
+    } catch (e) {
+      setError(e.message)
+      setLoading(false)
+    }
   }
 
   return (
@@ -51,17 +56,15 @@ export default function IssueNewPage() {
 
       <div className="form-section">
         <span className="form-label">사진 첨부</span>
-        <button type="button" className="photo-add">
-          <span className="photo-add-plus">＋</span>
-          사진 추가
-        </button>
-        <p className="form-hint">최대 5장까지 첨부할 수 있어요</p>
+        <PhotoUpload value={photoUrl} onChange={setPhotoUrl} upload={uploadIssueImage} />
+        <p className="form-hint">jpg · png · webp · gif, 최대 10MB</p>
         <p className="form-hint">• 접수하시면 임대인에게 즉시 알림이 전송돼요</p>
       </div>
 
       <div className="form-actions">
-        <Button full disabled={!category} onClick={submit}>
-          접수하기
+        {error && <p className="field-error mt-16" style={{ marginBottom: 12 }}>{error}</p>}
+        <Button full disabled={!category || !description.trim() || loading} onClick={submit}>
+          {loading ? '접수 중…' : '접수하기'}
         </Button>
       </div>
     </div>

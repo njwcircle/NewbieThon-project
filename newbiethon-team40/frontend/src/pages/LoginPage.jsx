@@ -13,15 +13,30 @@ const ROLES = [
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const { login, logout } = useAuth()
   const [role, setRole] = useState('TENANT')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  // mock 단계에서는 비밀번호를 검사하지 않고 선택한 역할로 바로 로그인합니다.
-  const submit = () => {
-    login(role)
-    navigate('/', { replace: true })
+  const submit = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const me = await login(phone, password)
+      // 역할은 서버가 정합니다. 탭을 잘못 고른 경우 알려주고 되돌립니다.
+      if (me.role !== role) {
+        logout()
+        setError(`이 계정은 ${me.role === 'LANDLORD' ? '임대인' : '임차인'} 계정이에요`)
+        return
+      }
+      navigate('/', { replace: true })
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -43,10 +58,12 @@ export default function LoginPage() {
           placeholder="비밀번호를 입력하세요"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          error={error}
         />
+
         <div className="stack gap-8">
-          <Button full onClick={submit}>
-            로그인
+          <Button full disabled={loading || !phone || !password} onClick={submit}>
+            {loading ? '로그인 중…' : '로그인'}
           </Button>
           <Button variant="outline" full small onClick={() => navigate('/signup')}>
             회원가입

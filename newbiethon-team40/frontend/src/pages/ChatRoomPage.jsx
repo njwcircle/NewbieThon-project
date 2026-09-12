@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useAuth, useData } from '../store'
-import { CATEGORY, formatDate } from '../mock/constants'
+import { CATEGORY, formatDate } from '../constants'
 import StatusChip from '../components/StatusChip'
 
 const timeOf = (iso) => {
@@ -17,27 +17,34 @@ export default function ChatRoomPage() {
   const { user } = useAuth()
   const { rooms, messages, issues, sendMessage } = useData()
   const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
   const bottomRef = useRef(null)
 
   const room = rooms.find((r) => r.id === roomId)
   const list = messages[roomId] || []
 
-  // 새 메시지가 오면 항상 맨 아래를 보여줍니다.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [list.length])
 
   if (!room) return <Navigate to="/chat" replace />
 
-  const isLandlord = user.role === 'LANDLORD'
-  const counterpart = isLandlord ? `${room.tenantName} 임차인` : `${room.landlordName} 임대인`
-
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
-    if (!text.trim()) return
-    sendMessage(roomId, text.trim())
+    if (!text.trim() || sending) return
+    const content = text.trim()
     setText('')
+    setSending(true)
+    try {
+      await sendMessage(roomId, content)
+    } catch {
+      setText(content) // 실패하면 입력값을 되돌려줍니다
+    } finally {
+      setSending(false)
+    }
   }
+
+  let lastDay = null
 
   return (
     <div className="page page--fixed">
@@ -45,35 +52,46 @@ export default function ChatRoomPage() {
         <button type="button" className="pagehead-back" onClick={() => navigate('/chat')} aria-label="뒤로">
           ‹
         </button>
-        <span className="chat-avatar">{counterpart.slice(0, 1)}</span>
+        <span className="chat-avatar">{room.counterpartName.slice(0, 1)}</span>
         <div>
-          <p className="chat-name">{counterpart}</p>
+          <p className="chat-name">{room.counterpartName}</p>
         </div>
       </header>
 
       <div className="chat-body">
-        <span className="chat-day">{formatDate(list[0]?.sentAt.slice(0, 10))}</span>
-
         {list.map((msg) => {
+          const day = msg.sentAt.slice(0, 10)
+          const showDay = day !== lastDay
+          lastDay = day
+
           const mine = msg.senderId === user.id
-          const issue = msg.type === 'issue' ? issues.find((i) => i.id === msg.issueId) : null
+          const isSystem = msg.senderId === null
+          const issue = msg.type === 'SYSTEM_ISSUE' ? issues.find((i) => i.id === msg.refId) : null
 
           return (
-            <div key={msg.id} className={`msg${mine ? ' msg--me' : ''}`}>
-              {issue ? (
-                <div className="msg-issue">
-                  <div className="listcard-top">
-                    <span className="msg-issue-title">{issue.title}</span>
-                    <StatusChip status={issue.status} />
-                  </div>
-                  <p className="msg-issue-meta">
-                    {CATEGORY[issue.category]} · {formatDate(issue.createdAt)}
-                  </p>
+            <div key={msg.id} style={{ display: 'contents' }}>
+              {showDay && <span className="chat-day">{formatDate(day)}</span>}
+
+              {isSystem ? (
+                <div className="msg-system">
+                  <p className="msg-system-text">{msg.content}</p>
+                  {issue && (
+                    <button
+                      type="button"
+                      className="msg-issue-link"
+                      onClick={() => navigate(`/issues/${issue.id}`)}
+                    >
+                      <span className="msg-issue-title">{CATEGORY[issue.category]} 문제</span>
+                      <StatusChip status={issue.status} />
+                    </button>
+                  )}
                 </div>
               ) : (
-                <p className="msg-bubble">{msg.text}</p>
+                <div className={`msg${mine ? ' msg--me' : ''}`}>
+                  <p className="msg-bubble">{msg.content}</p>
+                  <span className="msg-time">{timeOf(msg.sentAt)}</span>
+                </div>
               )}
-              <span className="msg-time">{timeOf(msg.sentAt)}</span>
             </div>
           )
         })}
@@ -88,7 +106,7 @@ export default function ChatRoomPage() {
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        <button type="submit" className="chat-send" disabled={!text.trim()} aria-label="전송">
+        <button type="submit" className="chat-send" disabled={!text.trim() || sending} aria-label="전송">
           →
         </button>
       </form>

@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth, useData } from '../store'
-import { formatDate } from '../mock/constants'
+import { formatDate } from '../constants'
+import { unitLabelOf } from '../api/data'
 import SectionHeader from '../components/SectionHeader'
 import ListCard from '../components/ListCard'
 import StatusChip from '../components/StatusChip'
@@ -10,7 +11,7 @@ import EmptyState from '../components/EmptyState'
 function TenantHome() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { units, issues } = useData()
+  const { units, issues, loading } = useData()
 
   const unit = units.find((u) => u.contractId === user.contractId)
   const myIssues = issues.filter((i) => i.contractId === user.contractId).slice(0, 2)
@@ -20,7 +21,7 @@ function TenantHome() {
       <div className="home-head">
         <div>
           <h1 className="home-greeting">안녕하세요, {user.name}님</h1>
-          <p className="home-place">📍 {unit ? `${unit.buildingName} ${unit.ho}호` : '연결된 계약 없음'}</p>
+          <p className="home-place">📍 {unit ? unitLabelOf(unit) : '연결된 계약 없음'}</p>
         </div>
         <button type="button" className="home-bell" aria-label="알림">
           🔔
@@ -31,9 +32,7 @@ function TenantHome() {
         <div className="home-section">
           <div className="contract-card">
             <p className="contract-card-label">현재 계약</p>
-            <p className="contract-card-title">
-              {unit.buildingName} {unit.ho}호
-            </p>
+            <p className="contract-card-title">{unitLabelOf(unit)}</p>
             <p className="contract-card-period">
               {formatDate(unit.startDate)} ~ {formatDate(unit.endDate)}
             </p>
@@ -78,7 +77,7 @@ function TenantHome() {
 function LandlordHome() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { units, issues } = useData()
+  const { units, issues, loading } = useData()
 
   const openIssues = issues.filter((i) => i.status !== 'RESOLVED')
   const recent = [...openIssues, ...issues.filter((i) => i.status === 'RESOLVED')].slice(0, 3)
@@ -112,7 +111,7 @@ function LandlordHome() {
         <SectionHeader title="문제접수 현황" actionLabel="전체보기" onAction={() => navigate('/issues')} />
 
         {recent.length === 0 ? (
-          <EmptyState icon="🙌" title="접수된 문제가 없어요" desc="임차인이 문제를 접수하면 여기에 표시됩니다" />
+          <EmptyState icon="🙌" title={loading ? '불러오는 중…' : '접수된 문제가 없어요'} desc={loading ? '' : '임차인이 문제를 접수하면 여기에 표시됩니다'} />
         ) : (
           <div className="stack gap-12">
             {recent.map((issue) => (

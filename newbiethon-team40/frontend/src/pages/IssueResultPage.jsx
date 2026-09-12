@@ -1,21 +1,20 @@
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { useData } from '../store'
-import { RESPONSIBLE } from '../mock/constants'
+import { RESPONSIBLE } from '../constants'
 import Button from '../components/Button'
 
 /*
- * 접수 직후 화면. 사전 협의내용에 같은 카테고리가 있으면 부담자가 자동 확정되고,
- * 없으면 임대인과 채팅으로 협의하도록 안내합니다. (README 매칭 규칙 v1)
+ * 접수 직후 화면. 서버가 사전합의를 찾아서 agreement_matched / next_action으로 알려줍니다.
+ *  - FOLLOW_AGREEMENT : 합의된 부담자로 확정
+ *  - OPEN_CHAT        : 합의 없음 → 채팅으로 협의
  */
 export default function IssueResultPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { issues } = useData()
+  const result = location.state
 
-  const issue = issues.find((i) => i.id === location.state?.issueId)
-  if (!issue) return <Navigate to="/issues" replace />
+  if (!result) return <Navigate to="/issues" replace />
 
-  const matched = issue.status === 'AUTO_RESOLVED'
+  const matched = result.matched
 
   return (
     <div className="page">
@@ -27,7 +26,7 @@ export default function IssueResultPage() {
             <>
               사전 협의내용에 따라
               <br />
-              <strong>{RESPONSIBLE[issue.responsible]} 부담</strong>으로 확인됐어요
+              <strong>{RESPONSIBLE[result.responsible]} 부담</strong>으로 확인됐어요
             </>
           ) : (
             <>
@@ -38,12 +37,12 @@ export default function IssueResultPage() {
           )}
         </p>
 
-        {matched && issue.matchedNote && <p className="result-note">📄 {issue.matchedNote}</p>}
+        {matched && result.note && <p className="result-note">📄 {result.note}</p>}
       </div>
 
       <div className="form-actions stack gap-12">
         {matched ? (
-          <Button full onClick={() => navigate(`/issues/${issue.id}`, { replace: true })}>
+          <Button full onClick={() => navigate(`/issues/${result.issueId}`, { replace: true })}>
             접수 내역 보기
           </Button>
         ) : (
