@@ -71,6 +71,14 @@ uvicorn app.main:app --reload
   - 발송 전 `notification_settings`(`payment_alert`/`issue_alert`/`chat_alert`)를 확인해서 꺼져있으면 그 사람에겐 안 보냄
 - 실제 발송은 [app/push_service.py](app/push_service.py)가 담당. **`FIREBASE_CREDENTIALS_PATH` 환경변수가 없으면 실제 발송 없이 로그만 남기고 조용히 스킵** — Firebase 프로젝트 없이도 로컬 개발/스모크 테스트가 깨지지 않게 하려는 설계. 실제 배포 시 Firebase 콘솔 > 프로젝트 설정 > 서비스 계정에서 발급받은 JSON 파일 경로를 `.env`에 설정하면 그때부터 실제로 나감.
 
+**Firebase 설정 방법 (팀원 각자 로컬에서 한 번씩)**:
+1. Firebase 콘솔 → 이 프로젝트 선택 → 프로젝트 설정 → 서비스 계정 탭 → "새 비공개 키 생성"
+2. 다운로드된 JSON 파일을 `backend/` 폴더 안에 저장 (파일명 아무거나 상관없음 — `.gitignore`에 `*firebase-adminsdk*.json` 패턴으로 이미 제외돼 있어서 git에 절대 안 올라감)
+3. `backend/.env.example`을 복사해서 `backend/.env` 만들고, `FIREBASE_CREDENTIALS_PATH`에 그 JSON 파일 경로 입력(예: `./firebase-adminsdk-xxxxx.json`)
+4. `.env`는 `python-dotenv`로 앱 시작 시 자동 로드됨([app/\_\_init\_\_.py](app/__init__.py)) — 서버 재시작만 하면 적용됨
+
+주의: 이 JSON 키 파일은 **비밀키**라서 Slack/카톡 등으로 공유하지 말고, 팀원 각자 위 절차대로 Firebase 콘솔에서 직접 발급받는 걸 추천. (같은 서비스 계정 키를 여러 명이 공유해야 하는 상황이면, 안전한 채널로만 전달하고 공개 저장소에는 절대 올리지 말 것.)
+
 ## 스키마
 
 `users` / `buildings` / `units` / `contracts` / `invite_codes` / `payments` / `issue_reports` / `notification_settings` / `repair_vendors` / `prior_agreements` / `chat_rooms` / `chat_messages` / `device_tokens` 13개 테이블. 관계는 루트 [README.md](../README.md)의 데이터 인터페이스 문서 및 대화 내 스키마 설계 참고.
