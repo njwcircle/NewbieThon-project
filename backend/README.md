@@ -1,6 +1,6 @@
-# Backend (로그인 · 프로필 · 대시보드 · 채팅 · FCM)
+# Backend (로그인 · 프로필 · 대시보드 · 채팅 · FCM · 문제접수 · 법률에이전트)
 
-FastAPI + SQLite. 임대인/임차인 로그인, 건물/호실/계약, 초대코드, 프로필(지난 계약·비번수정·알림설정), 대시보드(건물별 보드·사전합의사항·수리업체·납부알림), 채팅(계약별 1:1 채팅방 + 시스템 메시지), FCM 푸시(디바이스 토큰 등록 + 채팅 이벤트 발송) 흐름을 구현.
+FastAPI + SQLite. 임대인/임차인 로그인, 건물/호실/계약, 초대코드, 프로필(지난 계약·비번수정·알림설정), 대시보드(건물별 보드·사전합의사항·수리업체·납부알림), 채팅(계약별 1:1 채팅방 + 시스템 메시지), FCM 푸시(디바이스 토큰 등록 + 채팅 이벤트 발송), 문제접수(사진 업로드·사전합의 자동매칭·해결처리), 법률에이전트(OpenAI SDK 호환 LLM 기반 Q&A — Gemini/Upstage/Groq 등 교체 가능) 흐름을 구현.
 
 ## 실행 방법
 
@@ -31,7 +31,6 @@ uvicorn app.main:app --reload
 - 지난 계약 목록: `GET /users/me/contracts` — 임대인은 본인이 등록한 계약, 임차인은 본인이 연결된 계약만 요약(건물명+호실+기간) 리턴
 - 계약 상세: `GET /contracts/{contract_id}` — 해당 계약의 임대인/임차인만 조회 가능(제3자 403)
 - 납부 기록: `GET /contracts/{contract_id}/payments`, 생성은 `POST /contracts/{contract_id}/payments` (임대인만)
-- 문제접수 기록: `GET /contracts/{contract_id}/issues` — **읽기 전용.** 생성(신고 접수) API는 문제접수 담당 기능에서 `issue_reports` 테이블에 직접 쓰는 방식으로 붙을 예정이라 아직 없음.
 - 채팅알림설정: `GET/PUT /users/me/notification-settings` — `payment_alert`/`issue_alert`/`chat_alert` 개별 on/off, 기본값 전부 true
 
 ### 대시보드
@@ -71,13 +70,30 @@ uvicorn app.main:app --reload
   - 발송 전 `notification_settings`(`payment_alert`/`issue_alert`/`chat_alert`)를 확인해서 꺼져있으면 그 사람에겐 안 보냄
 - 실제 발송은 [app/push_service.py](app/push_service.py)가 담당. **`FIREBASE_CREDENTIALS_PATH` 환경변수가 없으면 실제 발송 없이 로그만 남기고 조용히 스킵** — Firebase 프로젝트 없이도 로컬 개발/스모크 테스트가 깨지지 않게 하려는 설계. 실제 배포 시 Firebase 콘솔 > 프로젝트 설정 > 서비스 계정에서 발급받은 JSON 파일 경로를 `.env`에 설정하면 그때부터 실제로 나감.
 
-**Firebase 설정 방법 (팀원 각자 로컬에서 한 번씩)**:
+**Firebase 설정 방법**:
 1. Firebase 콘솔 → 이 프로젝트 선택 → 프로젝트 설정 → 서비스 계정 탭 → "새 비공개 키 생성"
 2. 다운로드된 JSON 파일을 `backend/` 폴더 안에 저장 (파일명 아무거나 상관없음 — `.gitignore`에 `*firebase-adminsdk*.json` 패턴으로 이미 제외돼 있어서 git에 절대 안 올라감)
 3. `backend/.env.example`을 복사해서 `backend/.env` 만들고, `FIREBASE_CREDENTIALS_PATH`에 그 JSON 파일 경로 입력(예: `./firebase-adminsdk-xxxxx.json`)
 4. `.env`는 `python-dotenv`로 앱 시작 시 자동 로드됨([app/\_\_init\_\_.py](app/__init__.py)) — 서버 재시작만 하면 적용됨
 
 주의: 이 JSON 키 파일은 **비밀키**라서 Slack/카톡 등으로 공유하지 말고, 팀원 각자 위 절차대로 Firebase 콘솔에서 직접 발급받는 걸 추천. (같은 서비스 계정 키를 여러 명이 공유해야 하는 상황이면, 안전한 채널로만 전달하고 공개 저장소에는 절대 올리지 말 것.)
+
+### 문제접수
+
+전부 계약ID 기준(`/contracts/{contract_id}/issues...`).
+
+- 접수: `POST /contracts/{contract_id}/issues` (body: `category`, `description`, `photo_url?`) — 계약 당사자만. 같은 카테고리의 `prior_agreements`가 있으면 그 `responsible`를 그대로 적용하고 상태를 `RECEIVED`로, 없으면 `responsible=UNDEFINED`/상태 `IN_CHAT`으로 접수해서 채팅으로 넘김. 응답에 `agreement_matched`(사전합의 매칭 여부)와 `next_action`(`FOLLOW_AGREEMENT`/`OPEN_CHAT`) 포함
+- 목록/단건 조회: `GET /contracts/{contract_id}/issues`, `GET /contracts/{contract_id}/issues/{issue_id}` — 계약 당사자만
+- 상태 변경: `PATCH /contracts/{contract_id}/issues/{issue_id}/status` — 임대인만
+- 해결 처리: `POST /contracts/{contract_id}/issues/{issue_id}/resolve` (body: `resolver`, `resolved_detail`, `cost`, `payer`, `payment_status`, `receipt_image_url?`) — 상태를 `RESOLVED`로 변경
+- 사진 업로드: `POST /uploads/issues`, `POST /uploads/receipts` (multipart `file`) — jpg/png/webp/gif만, 최대 10MB. 반환된 `url`(`/uploads/issues/{파일명}`)을 그대로 `photo_url`/`receipt_image_url`에 넣으면 됨. 업로드된 파일은 `/uploads/...`로 정적 서빙됨
+- 접수/상태변경/해결 시점마다 `chat_service.post_system_message()`를 그대로 재사용해서 `SYSTEM_ISSUE` 채팅 메시지가 자동으로 남음(신고 접수 시 어떤 처리 방향인지, 상태 변경, 해결 비용/부담주체까지)
+
+### 법률에이전트
+
+- `POST /contracts/{contract_id}/legal-advice` (body: `category`, `custom_category?`, `question`) — 계약 당사자만. 해당 계약의 사전합의사항 + 최근 문제접수 기록 20건을 컨텍스트로 모아 LLM에 전달하고, 상황요약/판단기준/확인할 점/다음 행동 순서로 답변 + 법률자문 아님을 명시하는 disclaimer 포함
+- **어떤 LLM을 쓸지는 환경변수로 교체 가능** — [app/legal_service.py](app/legal_service.py)가 `openai` 패키지의 `chat.completions` 엔드포인트만 쓰기 때문에, OpenAI SDK 호환 엔드포인트를 제공하는 곳(Google Gemini, Upstage Solar, Groq 등)이면 `LEGAL_LLM_BASE_URL`/`LEGAL_LLM_API_KEY`/`LEGAL_LLM_MODEL`만 바꿔서 그대로 쓸 수 있음. 기본값은 Google Gemini(무료 티어, 카드 등록 안 하면 무료 한도까지만 사용됨)
+- `LEGAL_LLM_API_KEY`/`LEGAL_LLM_MODEL`이 `.env`에 없으면 **503으로 우아하게 실패**(FCM의 `FIREBASE_CREDENTIALS_PATH` 미설정 시 동작과 같은 패턴) — 키가 없어도 나머지 기능은 전혀 영향 없음. 모델명은 코드에 기본값을 두지 않고 **명시적으로 설정 안 하면 바로 에러 메시지로 안내**(존재하지 않는 모델명으로 조용히 실패하는 걸 방지)
 
 ## 스키마
 
@@ -89,10 +105,7 @@ uvicorn app.main:app --reload
 - `issue_reports`의 `category`/`responsible` 코드값은 [루트 README](../README.md)에서 문제접수 담당자와 합의한 값과 동일(`BOILER`/`WATER`/`ELECTRIC`/`WALL`/`FURNITURE`/`ETC`, `LANDLORD`/`TENANT`/`UNDEFINED`). `repair_vendors.category`와 `prior_agreements.category`/`responsible`도 동일 코드값 재사용.
 - `payments.status`는 DB에 저장된 값과 별개로, 조회 시점에 `due_date`를 오늘과 비교해서 PENDING→OVERDUE로 즉시 계산한 값을 보여줌([app/utils.py](app/utils.py)의 `effective_payment_status`). 별도 배치/크론 없이도 항상 최신 상태.
 - `contracts.assigned_vendor_id`가 "선택옵션(수리업체 번호)"에 해당 — 호실이 아니라 계약에 매달려 있어서 임차인이 바뀌면 자동으로 초기화됨.
-
-### 알림(D-3/D-day/연체) 관련 한계
-
-`GET /notifications/due-payments`는 **알림 대상 목록만 계산**해서 돌려줍니다. 실제로 사용자 휴대폰에 푸시를 보내거나 카카오 알림톡을 발송하는 부분은 이 세션에서 만들지 않았어요 — FCM/카카오 비즈니스 채널 같은 외부 발송 채널 연동과 그걸 주기적으로 실행할 스케줄러(cron)가 별도로 필요합니다. 이 엔드포인트를 그 스케줄러가 주기적으로 폴링해서, 결과를 채팅 시스템 메시지나 실제 푸시로 내보내는 다음 단계 작업이 남아있습니다.
+- `issue_reports`는 팀원의 해결처리 기능으로 컬럼이 늘어남: `resolver`(누가 해결했는지: `LANDLORD`/`TENANT`/`REPAIR_VENDOR`), `cost`, `payer`(`LANDLORD`/`TENANT`/`SHARED`), `payment_status`(`PENDING`/`PAID`), `receipt_image_url`. 테이블 개수 자체는 그대로(13개), 기존 컬럼 확장만 있음.
 
 ## 스모크 테스트
 
@@ -100,4 +113,4 @@ uvicorn app.main:app --reload
 python smoke_test.py
 ```
 
-가입→건물/호실/계약 생성→초대코드→임차인가입→로그인, 프로필(지난 계약 조회, 계약 상세, 납부 기록, 문제접수 기록 조회, 비번 수정, 알림설정), 대시보드(수리업체 등록, 사전합의사항, 계약별 수리업체 배정, 건물/내 보드 조회, 납부확인 체크, D-3 알림 감지), 채팅(채팅방 자동생성, 납부확인 시 시스템 메시지 자동 게시, 일반 메시지 송수신, D-3 알림 실제 발송과 멱등성), FCM(디바이스 토큰 등록/소유권 이전/해제, Firebase 미설정 상태에서 메시지 발송이 죽지 않는지)까지 전체 플로우와 주요 실패 케이스(중복 호실, 재사용 초대코드, 오답 비밀번호, 권한 없는 접근, 제3자 계약/채팅 조회 차단, 임차인의 쓰기 권한 없는 엔드포인트 접근 차단)를 한번에 검증.
+가입→건물/호실/계약 생성→초대코드→임차인가입→로그인, 프로필(지난 계약 조회, 계약 상세, 납부 기록, 비번 수정, 알림설정), 대시보드(수리업체 등록, 사전합의사항, 계약별 수리업체 배정, 건물/내 보드 조회, 납부확인 체크, D-3 알림 감지), 채팅(채팅방 자동생성, 납부확인 시 시스템 메시지 자동 게시, 일반 메시지 송수신, D-3 알림 실제 발송과 멱등성), FCM(디바이스 토큰 등록/소유권 이전/해제, Firebase 미설정 상태에서 메시지 발송이 죽지 않는지), 문제접수(사전합의 매칭/미매칭 분기, 상태변경, 해결처리, 시스템 메시지 자동게시), 법률에이전트(LEGAL_LLM_API_KEY/LEGAL_LLM_MODEL 미설정 시 503 graceful degradation)까지 전체 플로우와 주요 실패 케이스(중복 호실, 재사용 초대코드, 오답 비밀번호, 권한 없는 접근, 제3자 계약/채팅/문제접수/법률상담 접근 차단, 임차인의 쓰기 권한 없는 엔드포인트 접근 차단)를 한번에 검증.

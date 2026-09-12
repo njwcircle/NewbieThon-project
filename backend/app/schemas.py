@@ -1,3 +1,4 @@
+import enum
 from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -5,10 +6,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from .models import (
     ChatMessageType,
     ContractStatus,
+    CostBearer,
     IssueCategory,
+    IssuePaymentStatus,
     IssueStatus,
     PaymentStatus,
     PaymentType,
+    ResolutionActor,
     Responsible,
     Role,
 )
@@ -149,16 +153,80 @@ class PaymentResponse(BaseModel):
     paid_at: datetime | None = None
 
 
+class IssueReportCreateRequest(BaseModel):
+    category: IssueCategory
+    description: str = Field(min_length=1)
+    photo_url: str | None = None
+
+
 class IssueReportResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    contract_id: str
     category: IssueCategory
     description: str | None = None
+    photo_url: str | None = None
     status: IssueStatus
     responsible: Responsible
+    resolver: ResolutionActor | None = None
+    resolved_detail: str | None = None
+    cost: int | None = None
+    payer: CostBearer | None = None
+    payment_status: IssuePaymentStatus | None = None
+    receipt_image_url: str | None = None
     created_at: datetime
     resolved_at: datetime | None = None
+
+
+class IssueCreateResponse(BaseModel):
+    issue: IssueReportResponse
+    agreement_matched: bool
+    agreement_note: str | None = None
+    next_action: str
+
+
+class IssueResolveRequest(BaseModel):
+    resolver: ResolutionActor
+    resolved_detail: str = Field(min_length=1)
+    cost: int = Field(ge=0)
+    payer: CostBearer
+    payment_status: IssuePaymentStatus
+    receipt_image_url: str | None = None
+    completed_at: datetime | None = None
+
+
+class IssueStatusUpdateRequest(BaseModel):
+    status: IssueStatus
+
+
+class UploadResponse(BaseModel):
+    url: str
+
+
+class LegalCategory(str, enum.Enum):
+    RENT = "RENT"
+    DEPOSIT = "DEPOSIT"
+    REPAIR_COST = "REPAIR_COST"
+    CONTRACT = "CONTRACT"
+    DEFECT = "DEFECT"
+    EVICTION = "EVICTION"
+    ETC = "ETC"
+
+
+class LegalAdviceRequest(BaseModel):
+    category: LegalCategory
+    custom_category: str | None = None
+    question: str = Field(min_length=2)
+
+
+class LegalAdviceResponse(BaseModel):
+    category: LegalCategory
+    answer: str
+    contract_id: str
+    referenced_issue_ids: list[str]
+    referenced_agreement_ids: list[str]
+    disclaimer: str
 
 
 class NotificationSettingsResponse(BaseModel):

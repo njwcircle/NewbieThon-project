@@ -95,18 +95,3 @@ def create_payment(
     db.commit()
     db.refresh(payment)
     return payment
-
-
-@router.get("/{contract_id}/issues", response_model=list[schemas.IssueReportResponse])
-def list_issues(
-    contract_id: str,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    contract = _get_accessible_contract(contract_id, current_user, db)
-    return (
-        db.query(models.IssueReport)
-        .filter(models.IssueReport.contract_id == contract.id)
-        .order_by(models.IssueReport.created_at.desc())
-        .all()
-    )
