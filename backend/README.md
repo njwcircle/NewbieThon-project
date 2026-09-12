@@ -70,7 +70,7 @@ uvicorn app.main:app --reload
   - 발송 전 `notification_settings`(`payment_alert`/`issue_alert`/`chat_alert`)를 확인해서 꺼져있으면 그 사람에겐 안 보냄
 - 실제 발송은 [app/push_service.py](app/push_service.py)가 담당. **`FIREBASE_CREDENTIALS_PATH` 환경변수가 없으면 실제 발송 없이 로그만 남기고 조용히 스킵** — Firebase 프로젝트 없이도 로컬 개발/스모크 테스트가 깨지지 않게 하려는 설계. 실제 배포 시 Firebase 콘솔 > 프로젝트 설정 > 서비스 계정에서 발급받은 JSON 파일 경로를 `.env`에 설정하면 그때부터 실제로 나감.
 
-**Firebase 설정 방법 (팀원 각자 로컬에서 한 번씩)**:
+**Firebase 설정 방법**:
 1. Firebase 콘솔 → 이 프로젝트 선택 → 프로젝트 설정 → 서비스 계정 탭 → "새 비공개 키 생성"
 2. 다운로드된 JSON 파일을 `backend/` 폴더 안에 저장 (파일명 아무거나 상관없음 — `.gitignore`에 `*firebase-adminsdk*.json` 패턴으로 이미 제외돼 있어서 git에 절대 안 올라감)
 3. `backend/.env.example`을 복사해서 `backend/.env` 만들고, `FIREBASE_CREDENTIALS_PATH`에 그 JSON 파일 경로 입력(예: `./firebase-adminsdk-xxxxx.json`)
@@ -78,7 +78,7 @@ uvicorn app.main:app --reload
 
 주의: 이 JSON 키 파일은 **비밀키**라서 Slack/카톡 등으로 공유하지 말고, 팀원 각자 위 절차대로 Firebase 콘솔에서 직접 발급받는 걸 추천. (같은 서비스 계정 키를 여러 명이 공유해야 하는 상황이면, 안전한 채널로만 전달하고 공개 저장소에는 절대 올리지 말 것.)
 
-### 문제접수 (팀원 기능 — `dd` 브랜치 통합분)
+### 문제접수
 
 전부 계약ID 기준(`/contracts/{contract_id}/issues...`).
 
@@ -89,7 +89,7 @@ uvicorn app.main:app --reload
 - 사진 업로드: `POST /uploads/issues`, `POST /uploads/receipts` (multipart `file`) — jpg/png/webp/gif만, 최대 10MB. 반환된 `url`(`/uploads/issues/{파일명}`)을 그대로 `photo_url`/`receipt_image_url`에 넣으면 됨. 업로드된 파일은 `/uploads/...`로 정적 서빙됨
 - 접수/상태변경/해결 시점마다 `chat_service.post_system_message()`를 그대로 재사용해서 `SYSTEM_ISSUE` 채팅 메시지가 자동으로 남음(신고 접수 시 어떤 처리 방향인지, 상태 변경, 해결 비용/부담주체까지)
 
-### 법률에이전트 (팀원 기능 — `dd` 브랜치 통합분)
+### 법률에이전트
 
 - `POST /contracts/{contract_id}/legal-advice` (body: `category`, `custom_category?`, `question`) — 계약 당사자만. 해당 계약의 사전합의사항 + 최근 문제접수 기록 20건을 컨텍스트로 모아 LLM에 전달하고, 상황요약/판단기준/확인할 점/다음 행동 순서로 답변 + 법률자문 아님을 명시하는 disclaimer 포함
 - **어떤 LLM을 쓸지는 환경변수로 교체 가능** — [app/legal_service.py](app/legal_service.py)가 `openai` 패키지의 `chat.completions` 엔드포인트만 쓰기 때문에, OpenAI SDK 호환 엔드포인트를 제공하는 곳(Google Gemini, Upstage Solar, Groq 등)이면 `LEGAL_LLM_BASE_URL`/`LEGAL_LLM_API_KEY`/`LEGAL_LLM_MODEL`만 바꿔서 그대로 쓸 수 있음. 기본값은 Google Gemini(무료 티어, 카드 등록 안 하면 무료 한도까지만 사용됨)
@@ -106,10 +106,6 @@ uvicorn app.main:app --reload
 - `payments.status`는 DB에 저장된 값과 별개로, 조회 시점에 `due_date`를 오늘과 비교해서 PENDING→OVERDUE로 즉시 계산한 값을 보여줌([app/utils.py](app/utils.py)의 `effective_payment_status`). 별도 배치/크론 없이도 항상 최신 상태.
 - `contracts.assigned_vendor_id`가 "선택옵션(수리업체 번호)"에 해당 — 호실이 아니라 계약에 매달려 있어서 임차인이 바뀌면 자동으로 초기화됨.
 - `issue_reports`는 팀원의 해결처리 기능으로 컬럼이 늘어남: `resolver`(누가 해결했는지: `LANDLORD`/`TENANT`/`REPAIR_VENDOR`), `cost`, `payer`(`LANDLORD`/`TENANT`/`SHARED`), `payment_status`(`PENDING`/`PAID`), `receipt_image_url`. 테이블 개수 자체는 그대로(13개), 기존 컬럼 확장만 있음.
-
-### 알림(D-3/D-day/연체) 관련 한계
-
-`GET /notifications/due-payments`는 **알림 대상 목록만 계산**해서 돌려줍니다. 실제로 사용자 휴대폰에 푸시를 보내거나 카카오 알림톡을 발송하는 부분은 이 세션에서 만들지 않았어요 — FCM/카카오 비즈니스 채널 같은 외부 발송 채널 연동과 그걸 주기적으로 실행할 스케줄러(cron)가 별도로 필요합니다. 이 엔드포인트를 그 스케줄러가 주기적으로 폴링해서, 결과를 채팅 시스템 메시지나 실제 푸시로 내보내는 다음 단계 작업이 남아있습니다.
 
 ## 스모크 테스트
 
