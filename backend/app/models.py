@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -38,6 +39,40 @@ class ContractStatus(str, enum.Enum):
     ENDED = "ENDED"
 
 
+class PaymentType(str, enum.Enum):
+    RENT = "RENT"
+    MAINTENANCE_FIXED = "MAINTENANCE_FIXED"
+    MAINTENANCE_VARIABLE = "MAINTENANCE_VARIABLE"
+
+
+class PaymentStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    PAID = "PAID"
+    OVERDUE = "OVERDUE"
+
+
+class IssueCategory(str, enum.Enum):
+    BOILER = "BOILER"
+    WATER = "WATER"
+    ELECTRIC = "ELECTRIC"
+    WALL = "WALL"
+    FURNITURE = "FURNITURE"
+    ETC = "ETC"
+
+
+class Responsible(str, enum.Enum):
+    LANDLORD = "LANDLORD"
+    TENANT = "TENANT"
+    UNDEFINED = "UNDEFINED"
+
+
+class IssueStatus(str, enum.Enum):
+    RECEIVED = "RECEIVED"
+    AUTO_RESOLVED = "AUTO_RESOLVED"
+    IN_CHAT = "IN_CHAT"
+    RESOLVED = "RESOLVED"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -54,6 +89,7 @@ class Building(Base):
 
     id = Column(String, primary_key=True, default=gen_uuid)
     landlord_id = Column(String, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=True)
     address = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -97,3 +133,41 @@ class InviteCode(Base):
     contract_id = Column(String, ForeignKey("contracts.id"), nullable=False)
     expires_at = Column(DateTime, default=default_invite_expiry)
     used_at = Column(DateTime, nullable=True)
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    contract_id = Column(String, ForeignKey("contracts.id"), nullable=False)
+    type = Column(SAEnum(PaymentType), nullable=False)
+    due_date = Column(Date, nullable=False)
+    amount = Column(Integer, nullable=False)
+    status = Column(SAEnum(PaymentStatus), nullable=False, default=PaymentStatus.PENDING)
+    proof_image_url = Column(String, nullable=True)
+    paid_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class IssueReport(Base):
+    __tablename__ = "issue_reports"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    contract_id = Column(String, ForeignKey("contracts.id"), nullable=False)
+    category = Column(SAEnum(IssueCategory), nullable=False)
+    description = Column(String, nullable=True)
+    photo_url = Column(String, nullable=True)
+    status = Column(SAEnum(IssueStatus), nullable=False, default=IssueStatus.RECEIVED)
+    responsible = Column(SAEnum(Responsible), nullable=False, default=Responsible.UNDEFINED)
+    resolved_detail = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+
+
+class NotificationSettings(Base):
+    __tablename__ = "notification_settings"
+
+    user_id = Column(String, ForeignKey("users.id"), primary_key=True)
+    payment_alert = Column(Boolean, nullable=False, default=True)
+    issue_alert = Column(Boolean, nullable=False, default=True)
+    chat_alert = Column(Boolean, nullable=False, default=True)

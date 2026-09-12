@@ -13,7 +13,7 @@ def create_building(
     db: Session = Depends(get_db),
     landlord: models.User = Depends(require_landlord),
 ):
-    building = models.Building(landlord_id=landlord.id, address=payload.address)
+    building = models.Building(landlord_id=landlord.id, name=payload.name, address=payload.address)
     db.add(building)
     db.commit()
     db.refresh(building)
