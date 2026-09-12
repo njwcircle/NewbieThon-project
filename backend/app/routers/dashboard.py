@@ -4,10 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from ..chat_service import post_system_message
 from ..deps import get_current_user, get_db, require_landlord
 from ..utils import effective_payment_status
 
 router = APIRouter(tags=["dashboard"])
+
+PAYMENT_TYPE_LABELS = {
+    models.PaymentType.RENT: "월세",
+    models.PaymentType.MAINTENANCE_FIXED: "관리비",
+    models.PaymentType.MAINTENANCE_VARIABLE: "관리비",
+}
 
 
 def _build_board_row(unit: models.Unit) -> schemas.BoardRowResponse:
@@ -127,6 +134,16 @@ def confirm_payment(
     payment.paid_at = datetime.utcnow()
     db.commit()
     db.refresh(payment)
+
+    label = PAYMENT_TYPE_LABELS[payment.type]
+    post_system_message(
+        db,
+        payment.contract_id,
+        models.ChatMessageType.SYSTEM_PAYMENT,
+        f"{payment.due_date.month}월 {label}가 납부 완료 처리되었습니다.",
+        ref_id=payment.id,
+    )
+
     return schemas.PaymentResponse(
         id=payment.id,
         type=payment.type,
@@ -137,16 +154,39 @@ def confirm_payment(
     )
 
 
+def _alert_type(payment: models.Payment, today: date) -> str | None:
+    delta = (payment.due_date - today).days
+    if delta == 3:
+        return "D-3"
+    if delta == 0:
+        return "D-DAY"
+    if delta < 0:
+        return "OVERDUE"
+    return None
+
+
+def _to_alert_response(payment: models.Payment, alert_type: str) -> schemas.DuePaymentAlertResponse:
+    contract = payment.contract
+    building = contract.unit.building
+    return schemas.DuePaymentAlertResponse(
+        payment_id=payment.id,
+        contract_id=contract.id,
+        building_name=building.name or building.address,
+        dong=contract.unit.dong,
+        ho=contract.unit.ho,
+        due_date=payment.due_date,
+        amount=payment.amount,
+        type=payment.type,
+        alert_type=alert_type,
+    )
+
+
 @router.get("/notifications/due-payments", response_model=list[schemas.DuePaymentAlertResponse])
 def list_due_payment_alerts(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """D-3/D-day/연체 대상 조회.
-
-    실제 푸시(FCM)나 카카오 알림톡 발송은 여기서 하지 않는다 — 이 목록을 스케줄러(cron)가
-    주기적으로 폴링해서 채팅/푸시로 실제 알림을 내보내는 별도 워커에서 연동해야 한다.
-    """
+    """D-3/D-day/연체 대상 미리보기 (본인 관련 계약만) — 채팅에 실제로 메시지를 남기진 않는다."""
     today = date.today()
     if current_user.role == models.Role.LANDLORD:
         contract_ids = [
@@ -171,29 +211,58 @@ def list_due_payment_alerts(
 
     alerts = []
     for payment in payments:
-        delta = (payment.due_date - today).days
-        if delta == 3:
-            alert_type = "D-3"
-        elif delta == 0:
-            alert_type = "D-DAY"
-        elif delta < 0:
-            alert_type = "OVERDUE"
-        else:
+        alert_type = _alert_type(payment, today)
+        if alert_type is not None:
+            alerts.append(_to_alert_response(payment, alert_type))
+    return alerts
+
+
+@router.post("/notifications/due-payments/dispatch", response_model=list[schemas.DuePaymentAlertResponse])
+def dispatch_due_payment_alerts(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """시스템 전체를 훑어서 D-3/D-day/연체 대상마다 해당 계약 채팅방에 시스템 메시지를 실제로 남긴다.
+
+    하루에 같은 (결제건, 알림종류) 조합은 한 번만 남기도록(멱등) 오늘자 채팅 메시지를 먼저 확인한다.
+    실제 서비스라면 이 엔드포인트를 하루 한 번 호출하는 스케줄러(cron)가 있어야 하고,
+    호출 인증도 사용자 로그인 토큰이 아니라 전용 서비스 자격 증명으로 바꾸는 게 맞다 —
+    지금은 그런 스케줄러/서비스 인증 인프라가 없어서 로그인한 사용자 누구나 호출 가능한
+    임시 상태다.
+    """
+    today = date.today()
+    today_start = datetime.combine(today, datetime.min.time())
+
+    payments = db.query(models.Payment).filter(models.Payment.status != models.PaymentStatus.PAID).all()
+
+    dispatched = []
+    for payment in payments:
+        alert_type = _alert_type(payment, today)
+        if alert_type is None:
             continue
 
-        contract = payment.contract
-        building = contract.unit.building
-        alerts.append(
-            schemas.DuePaymentAlertResponse(
-                payment_id=payment.id,
-                contract_id=contract.id,
-                building_name=building.name or building.address,
-                dong=contract.unit.dong,
-                ho=contract.unit.ho,
-                due_date=payment.due_date,
-                amount=payment.amount,
-                type=payment.type,
-                alert_type=alert_type,
+        marker = f"[{alert_type}]"
+        already_sent_today = (
+            db.query(models.ChatMessage)
+            .filter(
+                models.ChatMessage.ref_id == payment.id,
+                models.ChatMessage.type == models.ChatMessageType.SYSTEM_PAYMENT,
+                models.ChatMessage.content.like(f"{marker}%"),
+                models.ChatMessage.created_at >= today_start,
             )
+            .first()
         )
-    return alerts
+        if already_sent_today:
+            continue
+
+        label = PAYMENT_TYPE_LABELS[payment.type]
+        phrase = {
+            "D-3": "3일 남았습니다",
+            "D-DAY": "오늘입니다",
+            "OVERDUE": "연체되었습니다",
+        }[alert_type]
+        content = f"{marker} {payment.due_date.month}월 {label} 납부일이 {phrase}"
+        post_system_message(db, payment.contract_id, models.ChatMessageType.SYSTEM_PAYMENT, content, ref_id=payment.id)
+        dispatched.append(_to_alert_response(payment, alert_type))
+
+    return dispatched
