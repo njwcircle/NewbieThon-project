@@ -77,33 +77,66 @@ expect(r.status_code == 200, f"issue invite code failed: {r.status_code} {r.text
 invite_code = r.json()["code"]
 print("invite code issued OK", invite_code)
 
-# 6. tenant signup with invite code
+# 6. tenant signup (일반 가입, 초대코드 없음)
 r = client.post(
     "/auth/signup/tenant",
-    json={
-        "invite_code": invite_code,
-        "name": "세입자",
-        "phone": "01033334444",
-        "password": "password123",
-    },
+    json={"name": "세입자", "phone": "01033334444", "password": "password123"},
 )
 expect(r.status_code == 201, f"tenant signup failed: {r.status_code} {r.text}")
 tenant_token = r.json()["access_token"]
 tenant_headers = {"Authorization": f"Bearer {tenant_token}"}
-print("tenant signup OK")
+print("tenant signup (no invite code) OK")
 
-# 6b. reusing the same invite code should fail
+# 6a. 임대인은 초대코드를 redeem할 수 없음 (임차인 전용)
+r = client.post("/auth/redeem-invite-code", json={"invite_code": invite_code}, headers=landlord_headers)
+expect(r.status_code == 403, f"landlord should not redeem invite code: {r.status_code} {r.text}")
+print("landlord forbidden from redeeming invite code OK")
+
+# 6b. 로그인한 임차인이 초대코드로 계약에 연결
+r = client.post("/auth/redeem-invite-code", json={"invite_code": invite_code}, headers=tenant_headers)
+expect(r.status_code == 200, f"redeem invite code failed: {r.status_code} {r.text}")
+redeemed = r.json()
+expect(redeemed["building_name"] == "고려빌라" and redeemed["ho"] == "202", f"redeemed contract summary mismatch: {redeemed}")
+print("tenant redeem invite code OK")
+
+# 6c. 같은 초대코드를 다른 사람이 다시 쓰면 거부돼야 함
 r = client.post(
     "/auth/signup/tenant",
-    json={
-        "invite_code": invite_code,
-        "name": "다른사람",
-        "phone": "01055556666",
-        "password": "password123",
-    },
+    json={"name": "다른사람", "phone": "01055556666", "password": "password123"},
 )
+other_tenant_headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+r = client.post("/auth/redeem-invite-code", json={"invite_code": invite_code}, headers=other_tenant_headers)
 expect(r.status_code == 400, f"reused invite code should fail: {r.status_code} {r.text}")
 print("reused invite code rejected OK")
+
+# 6d. 이게 이번 수정의 핵심 이유: 같은 임차인 계정이 "두 번째 집"으로 이사가서
+# 새 계약을 또 redeem할 수 있어야 한다 (예전 signup+redeem 통합 방식으로는 불가능했음)
+# building_id와는 별개 건물을 써서 이후 건물 보드 테스트(호실 1개 가정)에 영향 없게 한다.
+r = client.post("/buildings", json={"name": "두번째집", "address": "서울시 다른동네"}, headers=landlord_headers)
+second_building_id = r.json()["id"]
+
+r = client.post(f"/buildings/{second_building_id}/units", json={"dong": "102", "ho": "305"}, headers=landlord_headers)
+second_unit_id = r.json()["id"]
+
+r = client.post(
+    f"/units/{second_unit_id}/contracts",
+    json={"rent_amount": 600000, "maintenance_fee_fixed": 60000, "start_date": "2027-02-01", "end_date": "2028-02-01"},
+    headers=landlord_headers,
+)
+second_contract_id = r.json()["id"]
+
+r = client.post(f"/units/{second_unit_id}/contracts/{second_contract_id}/invite-code", headers=landlord_headers)
+second_invite_code = r.json()["code"]
+
+r = client.post("/auth/redeem-invite-code", json={"invite_code": second_invite_code}, headers=tenant_headers)
+expect(r.status_code == 200 and r.json()["ho"] == "305", f"second redeem for same tenant failed: {r.status_code} {r.text}")
+
+r = client.get("/users/me/contracts", headers=tenant_headers)
+expect(
+    r.status_code == 200 and len(r.json()) == 2,
+    f"same tenant account should now have 2 contracts (지난 계약 여러 개): {r.status_code} {r.text}",
+)
+print("same tenant account can redeem a second contract (지난 계약 여러 개) OK")
 
 # 7. login as landlord
 r = client.post("/auth/login", json={"phone": "01011112222", "password": "password123"})
@@ -131,20 +164,18 @@ print("wrong password rejected OK")
 
 # --- 프로필 기능 ---
 
-# 11. tenant's 지난 계약 목록 (건물명 + 호실 표시)
+# 11. tenant's 지난 계약 목록 (건물명 + 호실 표시) — 6d에서 두 번째 계약도 redeem했으므로 2건
 r = client.get("/users/me/contracts", headers=tenant_headers)
 expect(r.status_code == 200, f"tenant contracts list failed: {r.status_code} {r.text}")
 contracts = r.json()
-expect(len(contracts) == 1, f"tenant should have exactly 1 contract: {contracts}")
-expect(
-    contracts[0]["building_name"] == "고려빌라" and contracts[0]["ho"] == "202",
-    f"contract summary mismatch: {contracts[0]}",
-)
-print("tenant 지난 계약 list OK")
+expect(len(contracts) == 2, f"tenant should have exactly 2 contracts (지난 계약 여러 개): {contracts}")
+first_contract_summary = next(c for c in contracts if c["ho"] == "202")
+expect(first_contract_summary["building_name"] == "고려빌라", f"contract summary mismatch: {first_contract_summary}")
+print("tenant 지난 계약 list (2건) OK")
 
-# 11b. landlord도 같은 계약을 자기 목록에서 봐야 함
+# 11b. landlord도 자기가 등록한 계약 2건을 목록에서 봐야 함
 r = client.get("/users/me/contracts", headers=landlord_headers)
-expect(r.status_code == 200 and len(r.json()) == 1, f"landlord contracts list failed: {r.text}")
+expect(r.status_code == 200 and len(r.json()) == 2, f"landlord contracts list failed: {r.text}")
 print("landlord 지난 계약 list OK")
 
 # 12. 계약 정보 상세 (당사자만 조회 가능)
@@ -316,9 +347,10 @@ expect(row["assigned_vendor"]["name"] == "고려보일러", f"board vendor misma
 print("landlord board OK (rent payment shows OVERDUE before confirm)")
 
 # 20b. 임차인 뷰 (수정 불가 - PATCH 엔드포인트 자체가 require_landlord라 접근 자체가 막힘)
+# 6d에서 두 번째 계약도 연결했으므로 활성 계약 2건이 보여야 함
 r = client.get("/users/me/board", headers=tenant_headers)
-expect(r.status_code == 200 and len(r.json()) == 1, f"tenant board failed: {r.text}")
-print("tenant board (read-only) OK")
+expect(r.status_code == 200 and len(r.json()) == 2, f"tenant board failed: {r.text}")
+print("tenant board (read-only, 2건) OK")
 
 r = client.patch(f"/contracts/{contract_id}/vendor", json={"vendor_id": None}, headers=tenant_headers)
 expect(r.status_code == 403, f"tenant should not reassign vendor: {r.status_code} {r.text}")

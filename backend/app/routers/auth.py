@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
-from ..deps import get_current_user, get_db
+from ..deps import get_current_user, get_db, require_tenant
 from ..security import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -39,6 +39,35 @@ def signup_landlord(payload: schemas.LandlordSignupRequest, db: Session = Depend
     status_code=status.HTTP_201_CREATED,
 )
 def signup_tenant(payload: schemas.TenantSignupRequest, db: Session = Depends(get_db)):
+    """초대코드 없이 그냥 일반 가입. 계약 연결은 로그인 후 /auth/redeem-invite-code에서 따로 한다."""
+    if db.query(models.User).filter(models.User.phone == payload.phone).first():
+        raise HTTPException(status_code=400, detail="이미 가입된 전화번호입니다.")
+
+    user = models.User(
+        role=models.Role.TENANT,
+        name=payload.name,
+        phone=payload.phone,
+        password_hash=hash_password(payload.password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token(subject=user.id, role=user.role.value)
+    return schemas.TokenResponse(access_token=token, role=user.role)
+
+
+@router.post("/redeem-invite-code", response_model=schemas.ContractSummaryResponse)
+def redeem_invite_code(
+    payload: schemas.RedeemInviteCodeRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_tenant),
+):
+    """로그인한 임차인이 초대코드를 넣어서 본인 계정을 계약에 연결한다.
+
+    같은 계정으로 여러 계약(예: 재계약, 다른 집으로 이사)을 순차적으로 연결할 수 있다 —
+    /users/me/contracts의 "지난 계약" 목록이 바로 이 계정에 연결된 계약들이다.
+    """
     invite = db.query(models.InviteCode).filter(models.InviteCode.code == payload.invite_code).first()
     if invite is None:
         raise HTTPException(status_code=404, detail="유효하지 않은 초대코드입니다.")
@@ -53,26 +82,21 @@ def signup_tenant(payload: schemas.TenantSignupRequest, db: Session = Depends(ge
     if contract.tenant_id is not None:
         raise HTTPException(status_code=400, detail="이미 임차인이 연결된 계약입니다.")
 
-    if db.query(models.User).filter(models.User.phone == payload.phone).first():
-        raise HTTPException(status_code=400, detail="이미 가입된 전화번호입니다.")
-
-    user = models.User(
-        role=models.Role.TENANT,
-        name=payload.name,
-        phone=payload.phone,
-        password_hash=hash_password(payload.password),
-    )
-    db.add(user)
-    db.flush()  # user.id 필요 (커밋 전)
-
-    contract.tenant_id = user.id
+    contract.tenant_id = current_user.id
     invite.used_at = datetime.utcnow()
-
     db.commit()
-    db.refresh(user)
+    db.refresh(contract)
 
-    token = create_access_token(subject=user.id, role=user.role.value)
-    return schemas.TokenResponse(access_token=token, role=user.role)
+    building = contract.unit.building
+    return schemas.ContractSummaryResponse(
+        id=contract.id,
+        building_name=building.name or building.address,
+        dong=contract.unit.dong,
+        ho=contract.unit.ho,
+        start_date=contract.start_date,
+        end_date=contract.end_date,
+        status=contract.status,
+    )
 
 
 @router.post("/login", response_model=schemas.TokenResponse)
