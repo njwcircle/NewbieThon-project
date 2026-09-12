@@ -77,22 +77,14 @@
 }
 
 .home-place {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   margin-top: 6px;
   font-size: 13px;
   color: var(--text-gray);
 }
 
-.home-bell {
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  background: var(--field);
-  font-size: 17px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
 
 .home-section {
   padding: 24px var(--page-x) 0;
@@ -156,7 +148,9 @@
 }
 
 .dash-icon {
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  color: var(--text);
 }
 
 .dash-label {

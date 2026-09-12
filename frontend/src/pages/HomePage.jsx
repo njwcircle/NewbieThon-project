@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth, useData } from '../store'
 import { formatDate } from '../constants'
 import { unitLabelOf } from '../api/data'
+import { PinIcon, GridIcon } from '../components/icons'
 import SectionHeader from '../components/SectionHeader'
 import ListCard from '../components/ListCard'
 import StatusChip from '../components/StatusChip'
@@ -21,11 +22,10 @@ function TenantHome() {
       <div className="home-head">
         <div>
           <h1 className="home-greeting">안녕하세요, {user.name}님</h1>
-          <p className="home-place">📍 {unit ? unitLabelOf(unit) : '연결된 계약 없음'}</p>
+          <p className="home-place">
+            <PinIcon /> {unit ? unitLabelOf(unit) : '연결된 계약 없음'}
+          </p>
         </div>
-        <button type="button" className="home-bell" aria-label="알림">
-          🔔
-        </button>
       </div>
 
       {unit && (
@@ -92,15 +92,14 @@ function LandlordHome() {
           <h1 className="home-greeting">안녕하세요, {user.name}님</h1>
           <p className="home-place">총 {units.length}세대 ▾</p>
         </div>
-        <button type="button" className="home-bell" aria-label="알림">
-          🔔
-        </button>
       </div>
 
       <div className="home-section">
         <div className="dash-card">
           <button type="button" className="dash-inner" onClick={() => navigate('/units')}>
-            <span className="dash-icon">🏢</span>
+            <span className="dash-icon">
+              <GridIcon />
+            </span>
             <span className="dash-label">세대입주 대시보드</span>
             <span className="dash-arrow">▶</span>
           </button>

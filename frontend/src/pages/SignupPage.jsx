@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../store'
+import { formatPhone } from '../constants'
 import HeroHeader from '../components/HeroHeader'
 import SegmentedControl from '../components/SegmentedControl'
 import TextField from '../components/TextField'
@@ -30,7 +31,7 @@ export default function SignupPage() {
     setError('')
     setLoading(true)
     try {
-      await signup(role, form.name, form.phone, form.password)
+      await signup(role, form.name.trim(), formatPhone(form.phone), form.password.trim())
       navigate('/', { replace: true })
     } catch (e) {
       setError(e.message)

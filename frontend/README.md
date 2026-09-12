@@ -9,7 +9,7 @@
 
 ```bash
 # 터미널 1 — 백엔드
-cd newbiethon-team40/backend
+cd backend
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -17,7 +17,7 @@ cp .env.example .env               # JWT_SECRET_KEY를 반드시 채울 것 (없
 uvicorn app.main:app --reload      # http://127.0.0.1:8000
 
 # 터미널 2 — 프론트
-cd newbiethon-team40/frontend
+cd frontend
 npm install
 npm run dev                        # http://localhost:5173
 ```
@@ -131,7 +131,7 @@ API 문서를 봐도 없는 필드들이라, 아래는 `api/data.js`에서 계�
 
 | 항목 | 값 |
 |---|---|
-| Root Directory | `newbiethon-team40/frontend` |
+| Root Directory | `frontend` |
 | Build Command | `npm run build` |
 | Output Directory | `dist` |
 | 환경변수 | `VITE_API_URL` = Railway 백엔드 주소 |

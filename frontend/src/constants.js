@@ -42,3 +42,19 @@ export const formatWon = (n) => (n == null ? '-' : `${n.toLocaleString('ko-KR')}
 export const formatManwon = (n) => (n == null ? '-' : `${Math.round(n / 10000)}만원`)
 
 export const formatDate = (iso) => (iso ? iso.replaceAll('-', '.') : '-')
+
+// 전화번호를 서버에 저장된 형식(하이픈 포함)으로 맞춘다.
+// 숫자만 입력해도, 하이픈을 넣어 입력해도 같은 결과가 나온다.
+//   01023456789    → 010-2345-6789
+//   010-2345-6789  → 010-2345-6789
+//   0212345678     → 02-1234-5678
+export const formatPhone = (input) => {
+  const d = (input || '').replace(/\D/g, '')
+  if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`
+  if (d.length === 10) {
+    return d.startsWith('02')
+      ? `${d.slice(0, 2)}-${d.slice(2, 6)}-${d.slice(6)}`
+      : `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`
+  }
+  return input.trim()
+}

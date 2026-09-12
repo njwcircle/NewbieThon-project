@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../store'
+import { formatPhone } from '../constants'
 import HeroHeader from '../components/HeroHeader'
 import SegmentedControl from '../components/SegmentedControl'
 import TextField from '../components/TextField'
@@ -24,7 +25,7 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const me = await login(phone, password)
+      const me = await login(formatPhone(phone), password.trim())
       // 역할은 서버가 정합니다. 탭을 잘못 고른 경우 알려주고 되돌립니다.
       if (me.role !== role) {
         logout()

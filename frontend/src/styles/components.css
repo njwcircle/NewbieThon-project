@@ -216,6 +216,7 @@
 
 /* 로그인 화면처럼 헤더 위에 로고를 얹는 경우 */
 .hero-brand {
+  font-family: 'Vitro Core', 'Noto Sans KR', sans-serif;
   text-align: center;
   white-space: pre-line;
   font-size: 22px;
@@ -545,7 +546,6 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  font-size: 19px;
   transition: background 200ms ease;
 }
 

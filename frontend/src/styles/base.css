@@ -1,3 +1,16 @@
+/*
+ * 로고 전용 폰트. 웹폰트 CDN이 없어서 설치된 폰트를 직접 쓴다.
+ * 폰트가 없는 기기에서는 Noto Sans KR Bold로 자연스럽게 대체된다.
+ * (팀원/심사위원 기기에도 보이게 하려면 .ttf를 public/fonts에 넣고 src에 url()을 추가하면 된다)
+ */
+@font-face {
+  font-family: 'Vitro Core';
+  src: local('VITRO CORE TTF'), local('비트로 코어 TTF'), local('VITRO-CORE-TTF');
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 *,
 *::before,
 *::after {
