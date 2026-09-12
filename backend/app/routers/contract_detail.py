@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..deps import get_current_user, get_db, require_landlord
+from ..utils import effective_payment_status
 
 router = APIRouter(prefix="/contracts", tags=["contract-detail"])
 
@@ -50,12 +51,23 @@ def list_payments(
     current_user: models.User = Depends(get_current_user),
 ):
     contract = _get_accessible_contract(contract_id, current_user, db)
-    return (
+    payments = (
         db.query(models.Payment)
         .filter(models.Payment.contract_id == contract.id)
         .order_by(models.Payment.due_date.desc())
         .all()
     )
+    return [
+        schemas.PaymentResponse(
+            id=p.id,
+            type=p.type,
+            due_date=p.due_date,
+            amount=p.amount,
+            status=effective_payment_status(p),
+            paid_at=p.paid_at,
+        )
+        for p in payments
+    ]
 
 
 @router.post("/{contract_id}/payments", response_model=schemas.PaymentResponse, status_code=status.HTTP_201_CREATED)

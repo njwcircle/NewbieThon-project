@@ -164,3 +164,80 @@ class NotificationSettingsUpdateRequest(BaseModel):
     payment_alert: bool
     issue_alert: bool
     chat_alert: bool
+
+
+class RepairVendorCreateRequest(BaseModel):
+    category: IssueCategory
+    name: str
+    phone: str
+
+
+class RepairVendorUpdateRequest(BaseModel):
+    category: IssueCategory
+    name: str
+    phone: str
+
+
+class RepairVendorResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    building_id: str
+    category: IssueCategory
+    name: str
+    phone: str
+
+
+class PriorAgreementCreateRequest(BaseModel):
+    category: IssueCategory
+    responsible: Responsible
+    note: str | None = None
+
+
+class PriorAgreementUpdateRequest(BaseModel):
+    responsible: Responsible
+    note: str | None = None
+
+
+class PriorAgreementResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    contract_id: str
+    category: IssueCategory
+    responsible: Responsible
+    note: str | None = None
+
+
+class VendorAssignRequest(BaseModel):
+    vendor_id: str | None = None
+
+
+class BoardRowResponse(BaseModel):
+    """건물·동·호수별 대시보드 한 줄. 계약이 없는(공실) 호실은 unit 정보만 채워진다."""
+
+    unit_id: str
+    dong: str
+    ho: str
+    contract_id: str | None = None
+    tenant_name: str | None = None
+    rent_amount: int | None = None
+    maintenance_fee_fixed: int | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    payment_status: PaymentStatus | None = None
+    assigned_vendor: RepairVendorResponse | None = None
+
+
+class DuePaymentAlertResponse(BaseModel):
+    """D-3/D-day/연체 알림 대상 1건. 실제 푸시 발송은 이 목록을 스케줄러가 폴링해서 연동."""
+
+    payment_id: str
+    contract_id: str
+    building_name: str
+    dong: str
+    ho: str
+    due_date: date
+    amount: int
+    type: PaymentType
+    alert_type: str
