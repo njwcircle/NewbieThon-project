@@ -123,6 +123,33 @@ API 문서를 봐도 없는 필드들이라, 아래는 `api/data.js`에서 계�
 - **FCM 푸시** — 웹에서는 사용하지 않는다.
 - 사진은 **문제당 1장**만 가능하다. `issue_reports.photo_url`이 단일 컬럼이라서다.
 
+## 배포
+
+백엔드는 Railway에 올라가 있다. 프론트는 정적 빌드라 Vercel이나 Netlify 어디든 된다.
+
+**호스팅 설정**
+
+| 항목 | 값 |
+|---|---|
+| Root Directory | `newbiethon-team40/frontend` |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+| 환경변수 | `VITE_API_URL` = Railway 백엔드 주소 |
+
+`VITE_API_URL`은 **빌드 시점에 코드에 박히는** 값이다. 주소를 바꾸면 다시 배포해야 반영된다.
+
+**SPA 라우팅** — `vercel.json`(Vercel)과 `public/_redirects`(Netlify)가 이미 들어있다.
+이 설정이 없으면 주소창에 `/units`를 직접 치거나 새로고침할 때 404가 난다.
+서버가 `/units`라는 파일을 찾으려 하기 때문이고, 위 설정이 모든 경로를 `index.html`로 넘겨서
+라우팅을 React Router가 처리하게 한다.
+
+**주의 — Railway의 파일시스템은 재시작하면 초기화된다**
+
+백엔드가 SQLite(`app.db`)와 업로드 이미지를 로컬 파일로 저장하고 있어서,
+서버가 재시작되면 **가입한 계정·계약·채팅·사진이 전부 사라진다.**
+데모용이면 감수해도 되지만, 계속 쓸 거라면 Postgres(`DATABASE_URL` 교체)와
+이미지 외부 저장소가 필요하다.
+
 ## 참고
 
 - 전체 API 목록: [`../backend/API.md`](../backend/API.md)
