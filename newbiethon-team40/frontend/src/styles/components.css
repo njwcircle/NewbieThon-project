@@ -1,0 +1,567 @@
+/* ===== Button ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 52px;
+  padding: 0 20px;
+  border-radius: var(--radius-btn);
+  font-size: 16px;
+  font-weight: 700;
+  transition: transform 160ms ease-out, opacity 160ms ease-out;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.btn--full {
+  width: 100%;
+}
+
+.btn--primary {
+  background: var(--black);
+  color: #fff;
+}
+
+.btn--outline {
+  background: var(--card);
+  color: var(--blue);
+  border: 1.5px solid var(--blue);
+}
+
+.btn--small {
+  height: 38px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+
+/* ===== StatusChip ===== */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: var(--radius-chip);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chip--progress {
+  background: var(--blue-tint);
+  color: var(--blue);
+}
+.chip--done {
+  background: var(--indigo);
+  color: var(--indigo-text);
+}
+.chip--alert {
+  background: var(--red-tint);
+  color: var(--red);
+}
+.chip--muted {
+  background: var(--field);
+  color: var(--text-gray);
+}
+
+/* ===== Card ===== */
+.card {
+  background: var(--card);
+  border-radius: var(--radius-card);
+  padding: 16px;
+}
+
+.card--bordered {
+  border: 1px solid var(--border);
+}
+
+/* ===== ListCard ===== */
+.listcard {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 14px 16px;
+  transition: transform 160ms ease-out;
+}
+
+.listcard:active {
+  transform: scale(0.99);
+}
+
+.listcard-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.listcard-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listcard-meta {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-gray);
+  white-space: pre-line;
+  line-height: 1.45;
+}
+
+/* ===== SectionHeader ===== */
+.sectionhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sectionhead-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.sectionhead-action {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-gray);
+}
+
+.sectionhead-action--blue {
+  color: var(--blue);
+  font-weight: 700;
+}
+
+/* ===== PageHeader ===== */
+.pagehead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 var(--page-x);
+  background: var(--card);
+}
+
+.pagehead-back {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text);
+  width: 28px;
+  margin-left: -6px;
+}
+
+.pagehead-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* ===== HeroHeader (파란 밴드 + 흰 지붕) ===== */
+.hero {
+  background: var(--blue-band);
+  padding-top: 24px;
+}
+
+.hero-eyebrow {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-sub);
+  padding-bottom: 22px;
+}
+
+.hero-roofwrap {
+  position: relative;
+  height: 80px;
+}
+
+.hero-roof {
+  position: absolute;
+  inset: 0;
+  background: var(--card);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.hero-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.hero-sub {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-gray);
+  padding: 18px var(--page-x) 0;
+  background: var(--card);
+}
+
+/* 로그인 화면처럼 헤더 위에 로고를 얹는 경우 */
+.hero-brand {
+  text-align: center;
+  white-space: pre-line;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+
+/* ===== TextField (언더라인 인풋) ===== */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.field-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  padding: 8px 0 11px;
+}
+
+.field-box:focus-within {
+  border-bottom-color: var(--blue);
+}
+
+.field-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  font-size: 14px;
+}
+
+.field-input::placeholder {
+  color: var(--text-gray);
+}
+
+.field-suffix {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-sub);
+}
+
+.field-error {
+  font-size: 12px;
+  color: var(--red);
+}
+
+.field-row {
+  display: flex;
+  gap: 16px;
+}
+
+.field-row > * {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ===== TextArea ===== */
+.textarea {
+  width: 100%;
+  min-height: 110px;
+  padding: 14px;
+  border: none;
+  border-radius: var(--radius-btn);
+  background: var(--field);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+}
+
+.textarea::placeholder {
+  color: var(--text-gray);
+}
+
+/* ===== SegmentedControl ===== */
+.segmented {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-btn);
+  background: var(--field);
+}
+
+.segmented-item {
+  flex: 1;
+  height: 37px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-gray);
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.segmented-item--on {
+  background: var(--card);
+  color: var(--blue);
+}
+
+/* ===== ChipGroup (카테고리 선택 · 필터탭) ===== */
+.chipgroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chipgroup--grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.chipgroup-item {
+  height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius-btn);
+  background: var(--field);
+  border: 1.5px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-sub);
+  transition: transform 160ms ease-out;
+}
+
+.chipgroup-item:active {
+  transform: scale(0.97);
+}
+
+.chipgroup-item--on {
+  background: var(--blue-tint);
+  border-color: var(--blue);
+  color: var(--blue);
+  font-weight: 700;
+}
+
+.chipgroup--pill .chipgroup-item {
+  height: 36px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+/* ===== InfoRow ===== */
+.inforow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inforow-label {
+  font-size: 14px;
+  color: var(--text-gray);
+  white-space: nowrap;
+}
+
+.inforow-value {
+  font-size: 15px;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* ===== BottomSheet ===== */
+.sheet-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: sheet-fade 200ms ease-out;
+}
+
+.sheet {
+  width: 100%;
+  max-width: var(--app-width);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--card);
+  border-radius: 24px 24px 0 0;
+  padding-bottom: 40px;
+  animation: sheet-up 250ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes sheet-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  margin: 10px auto 0;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px var(--page-x) 16px;
+}
+
+.sheet-title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.sheet-close {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--text-gray);
+  font-size: 13px;
+}
+
+.sheet-divider {
+  height: 1px;
+  background: var(--border);
+}
+
+.sheet-section {
+  padding: 22px var(--page-x) 0;
+}
+
+/* ===== Toggle ===== */
+.toggle {
+  width: 46px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--field);
+  padding: 3px;
+  transition: background 200ms ease;
+}
+
+.toggle--on {
+  background: var(--blue);
+}
+
+.toggle-knob {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.toggle--on .toggle-knob {
+  transform: translateX(18px);
+}
+
+/* ===== EmptyState ===== */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 56px 20px;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 34px;
+}
+
+.empty-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.empty-desc {
+  font-size: 13px;
+  color: var(--text-gray);
+  line-height: 1.5;
+}
+
+/* ===== TabBar ===== */
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: var(--app-width);
+  height: var(--tabbar-height);
+  display: flex;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  z-index: 30;
+}
+
+.tabbar-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding-top: 6px;
+  color: var(--text-gray);
+}
+
+.tabbar-icon {
+  width: 44px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 19px;
+  transition: background 200ms ease;
+}
+
+.tabbar-label {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.tabbar-item--on {
+  color: var(--blue);
+}
+
+.tabbar-item--on .tabbar-icon {
+  background: var(--blue-tint);
+}
+
+.tabbar-item--on .tabbar-label {
+  font-weight: 700;
+}

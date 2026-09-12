@@ -1,0 +1,33 @@
+/* Figma 와이어프레임에서 실측한 값입니다. 색을 바꾸려면 여기만 고치세요. */
+:root {
+  /* 색 */
+  --blue: #3182f6; /* 링크 · 강조 · 진행중 텍스트 */
+  --blue-tint: #eaf2ff; /* 진행중 칩 배경 */
+  --blue-band: #c9defc; /* 히어로 밴드 */
+  --indigo: #38319b; /* 완료 칩 배경 (솔리드) */
+  --indigo-text: #e8f1ff; /* 완료 칩 글씨 */
+  --black: #000000; /* primary 버튼 */
+
+  --text: #191f28;
+  --text-sub: #4e5968;
+  --text-gray: #8b95a1;
+
+  --border: #edf0f3;
+  --line: #d1d6db; /* 언더라인 인풋 */
+  --bg: #f5f6f8; /* 페이지 배경 */
+  --card: #ffffff;
+  --field: #f2f4f6; /* 회색 입력창 · 비활성 칩 */
+
+  --red: #e5484d;
+  --red-tint: #ffebec;
+
+  /* 모양 */
+  --radius-card: 16px;
+  --radius-btn: 12px;
+  --radius-chip: 8px;
+
+  /* 레이아웃 */
+  --app-width: 430px;
+  --tabbar-height: 76px;
+  --page-x: 20px;
+}
