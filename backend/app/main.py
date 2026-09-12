@@ -45,7 +45,7 @@ app.include_router(chat.router)
 app.include_router(push.router)
 app.include_router(issues.upload_router)
 app.include_router(issues.router)
-app.mount("/uploads", StaticFiles(directory="uploads", check_dir=False), name="uploads")
+app.mount("/uploads", StaticFiles(directory=str(issues.UPLOAD_ROOT), check_dir=False), name="uploads")
 
 
 @app.get("/health")

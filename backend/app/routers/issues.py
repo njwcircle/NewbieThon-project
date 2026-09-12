@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from pathlib import Path
 import uuid
@@ -12,7 +13,9 @@ from ..deps import get_current_user, get_db, require_landlord
 router = APIRouter(prefix="/contracts/{contract_id}/issues", tags=["issues"])
 upload_router = APIRouter(prefix="/uploads", tags=["uploads"])
 
-UPLOAD_ROOT = Path(__file__).resolve().parents[2] / "uploads"
+# 로컬 개발 시엔 backend/uploads. 클라우드에 배포할 때는 재배포해도 안 지워지는 영구 볼륨 경로를
+# UPLOAD_DIR 환경변수로 지정해야 업로드한 사진이 유지된다(볼륨 없이 배포하면 재배포 시 소실됨).
+UPLOAD_ROOT = Path(os.getenv("UPLOAD_DIR") or (Path(__file__).resolve().parents[2] / "uploads"))
 ISSUE_UPLOAD_DIR = UPLOAD_ROOT / "issues"
 RECEIPT_UPLOAD_DIR = UPLOAD_ROOT / "receipts"
 ISSUE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
