@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from ..chat_service import get_or_create_room
 from ..deps import get_db, require_landlord
 
 router = APIRouter(prefix="/units/{unit_id}/contracts", tags=["contracts"])
@@ -54,6 +55,7 @@ def create_contract(
     db.add(contract)
     db.commit()
     db.refresh(contract)
+    get_or_create_room(db, contract.id)
     return contract
 
 

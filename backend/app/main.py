@@ -1,7 +1,18 @@
 from fastapi import FastAPI
 
 from .database import Base, engine
-from .routers import agreements, auth, buildings, contract_detail, contracts, dashboard, profile, repair_vendors, units
+from .routers import (
+    agreements,
+    auth,
+    buildings,
+    chat,
+    contract_detail,
+    contracts,
+    dashboard,
+    profile,
+    repair_vendors,
+    units,
+)
 
 Base.metadata.create_all(bind=engine)
 
@@ -16,6 +27,7 @@ app.include_router(profile.router)
 app.include_router(repair_vendors.router)
 app.include_router(agreements.router)
 app.include_router(dashboard.router)
+app.include_router(chat.router)
 
 
 @app.get("/health")

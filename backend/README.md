@@ -1,6 +1,6 @@
-# Backend (로그인 · 프로필 · 대시보드)
+# Backend (로그인 · 프로필 · 대시보드 · 채팅)
 
-FastAPI + SQLite. 임대인/임차인 로그인, 건물/호실/계약, 초대코드, 프로필(지난 계약·비번수정·알림설정), 대시보드(건물별 보드·사전합의사항·수리업체·납부알림) 흐름을 구현.
+FastAPI + SQLite. 임대인/임차인 로그인, 건물/호실/계약, 초대코드, 프로필(지난 계약·비번수정·알림설정), 대시보드(건물별 보드·사전합의사항·수리업체·납부알림), 채팅(계약별 1:1 채팅방 + 시스템 메시지) 흐름을 구현.
 
 ## 실행 방법
 
@@ -47,9 +47,22 @@ uvicorn app.main:app --reload
 - 납부상태 확인 체크: `PATCH /payments/{payment_id}/confirm` — 임대인이 입금 확인 후 수동으로 PAID 처리
 - D-3/D-day/연체 알림 대상 조회: `GET /notifications/due-payments` — 로그인한 사용자(임대인/임차인) 본인 관련 계약의 미납 건 중 `due_date`가 오늘+3일/오늘/오늘 이전인 것만 반환
 
+### 채팅
+
+계약당 채팅방 1개(호실이 아니라 **계약ID 기준** — 계약 생성 시 자동으로 만들어짐, `POST /units/{unit_id}/contracts` 호출 시점).
+
+- 메시지 목록: `GET /contracts/{contract_id}/messages` — 계약 당사자만, 일반 메시지/시스템 메시지가 한 타임라인에 시간순으로 섞여서 나옴 (`type`이 `TEXT`면 일반, `SYSTEM_ISSUE`/`SYSTEM_PAYMENT`면 시스템 — 프론트에서 이 값으로 말풍선/카드 UI를 구분)
+- 메시지 전송: `POST /contracts/{contract_id}/messages` (body: `content`) — 계약 당사자만, 항상 `TEXT` 타입
+- 시스템 메시지는 사용자가 직접 못 만들고, 백엔드 이벤트가 자동으로 남김:
+  - 납부확인(`PATCH /payments/{id}/confirm`) 처리 시 "OO월 OO가 납부 완료 처리되었습니다" 자동 게시
+  - `POST /notifications/due-payments/dispatch` — 시스템 전체의 D-3/D-day/연체 대상을 훑어서 각 계약 채팅방에 "OO월 OO 납부일이 3일 남았습니다" 류 메시지를 실제로 남김. 같은 결제건+알림종류는 하루에 한 번만 남기도록 멱등 처리(당일 채팅 메시지 존재 여부로 체크)
+  - **문제접수 기능에서 재사용할 것**: [app/chat_service.py](app/chat_service.py)의 `post_system_message(db, contract_id, ChatMessageType.SYSTEM_ISSUE, "...", ref_id=issue.id)`를 그대로 import해서 호출하면 됨(같은 프로세스라 HTTP 안 거치고 바로 함수 호출). 신고 접수/상태 변경 시 이걸 불러서 "에어컨 문제가 접수되었습니다", "처리 상태가 'OOO'으로 변경되었습니다" 같은 메시지를 남기면 된다. `SYSTEM_ISSUE` 타입 메시지의 `ref_id`는 `issue_reports.id`를 가리키므로, 프론트는 그 id로 `GET /contracts/{id}/issues`에서 상세를 가져와 "문제 카드"로 렌더링.
+
+**한계**: `dispatch` 엔드포인트는 원래 하루 한 번 도는 스케줄러(cron)가 호출해야 하는데, 그 스케줄러 자체와 실제 휴대폰 푸시(FCM)/카카오 알림톡 발송은 이 세션에서 만들지 않았다. 지금은 로그인한 사용자 누구나 호출 가능한 임시 상태이고, 실제 배포 시엔 사용자 토큰이 아니라 전용 서비스 자격 증명으로 바꿔야 한다.
+
 ## 스키마
 
-`users` / `buildings` / `units` / `contracts` / `invite_codes` / `payments` / `issue_reports` / `notification_settings` / `repair_vendors` / `prior_agreements` 10개 테이블. 관계는 루트 [README.md](../README.md)의 데이터 인터페이스 문서 및 대화 내 스키마 설계 참고.
+`users` / `buildings` / `units` / `contracts` / `invite_codes` / `payments` / `issue_reports` / `notification_settings` / `repair_vendors` / `prior_agreements` / `chat_rooms` / `chat_messages` 12개 테이블. 관계는 루트 [README.md](../README.md)의 데이터 인터페이스 문서 및 대화 내 스키마 설계 참고.
 
 - `units`는 물리적 호실(건물+동+호 유일), `contracts`가 계약(기간+임대인+임차인) 단위 — 같은 호실도 계약이 바뀌면 새 `contracts` row가 생성되어 이전 임차인 데이터와 분리됨.
 - 초대코드는 계약 1건당 발급, 1회용(`used_at`), 7일 만료(`expires_at`).
@@ -68,4 +81,4 @@ uvicorn app.main:app --reload
 python smoke_test.py
 ```
 
-가입→건물/호실/계약 생성→초대코드→임차인가입→로그인, 프로필(지난 계약 조회, 계약 상세, 납부 기록, 문제접수 기록 조회, 비번 수정, 알림설정), 대시보드(수리업체 등록, 사전합의사항, 계약별 수리업체 배정, 건물/내 보드 조회, 납부확인 체크, D-3 알림 감지)까지 전체 플로우와 주요 실패 케이스(중복 호실, 재사용 초대코드, 오답 비밀번호, 권한 없는 접근, 제3자 계약 조회 차단, 임차인의 쓰기 권한 없는 엔드포인트 접근 차단)를 한번에 검증.
+가입→건물/호실/계약 생성→초대코드→임차인가입→로그인, 프로필(지난 계약 조회, 계약 상세, 납부 기록, 문제접수 기록 조회, 비번 수정, 알림설정), 대시보드(수리업체 등록, 사전합의사항, 계약별 수리업체 배정, 건물/내 보드 조회, 납부확인 체크, D-3 알림 감지), 채팅(채팅방 자동생성, 납부확인 시 시스템 메시지 자동 게시, 일반 메시지 송수신, D-3 알림 실제 발송과 멱등성)까지 전체 플로우와 주요 실패 케이스(중복 호실, 재사용 초대코드, 오답 비밀번호, 권한 없는 접근, 제3자 계약/채팅 조회 차단, 임차인의 쓰기 권한 없는 엔드포인트 접근 차단)를 한번에 검증.

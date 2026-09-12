@@ -363,4 +363,63 @@ r = client.get("/notifications/due-payments", headers=tenant_headers)
 expect(r.status_code == 200 and len(r.json()) == 1, f"tenant due-payments alert failed: {r.text}")
 print("tenant sees same due-payments alert OK")
 
+# --- 채팅 기능 ---
+
+# 23. 계약 생성 시 채팅방이 자동으로 생겼는지 (메시지는 아직 없음)
+r = client.get(f"/contracts/{contract_id}/messages", headers=landlord_headers)
+expect(r.status_code == 200, f"list messages failed: {r.status_code} {r.text}")
+messages_before = r.json()
+# 이미 21번 납부확인에서 시스템 메시지 1건이 쌓여 있어야 함
+expect(
+    len(messages_before) == 1 and messages_before[0]["type"] == "SYSTEM_PAYMENT",
+    f"expected the payment-confirm system message already posted: {messages_before}",
+)
+print("chat room auto-created + payment-confirm system message present OK")
+
+# 23b. 제3자는 메시지 접근 불가
+r = client.get(f"/contracts/{contract_id}/messages", headers=stranger_headers)
+expect(r.status_code == 403, f"stranger should not read messages: {r.status_code} {r.text}")
+print("stranger forbidden from chat OK")
+
+# 24. 일반 메시지 주고받기
+r = client.post(f"/contracts/{contract_id}/messages", json={"content": "어제부터 찬바람이 안 나와요."}, headers=tenant_headers)
+expect(r.status_code == 201 and r.json()["type"] == "TEXT" and r.json()["sender_name"] == "세입자", f"tenant send message failed: {r.text}")
+print("tenant text message OK")
+
+r = client.post(f"/contracts/{contract_id}/messages", json={"content": "확인했습니다. 업체에 연락해볼게요."}, headers=landlord_headers)
+expect(r.status_code == 201 and r.json()["sender_name"] == "집주인", f"landlord send message failed: {r.text}")
+print("landlord text message OK")
+
+r = client.post(f"/contracts/{contract_id}/messages", json={"content": "몰래 보내기"}, headers=stranger_headers)
+expect(r.status_code == 403, f"stranger should not send messages: {r.status_code} {r.text}")
+print("stranger forbidden from sending message OK")
+
+r = client.get(f"/contracts/{contract_id}/messages", headers=tenant_headers)
+all_messages = r.json()
+expect(len(all_messages) == 3, f"expected 3 messages total (1 system + 2 text): {all_messages}")
+expect(all_messages[0]["type"] == "SYSTEM_PAYMENT" and all_messages[0]["sender_id"] is None, f"first message should be the system one: {all_messages}")
+expect([m["type"] for m in all_messages[1:]] == ["TEXT", "TEXT"], f"order/type mismatch: {all_messages}")
+print("message timeline (system + text, ordered) OK")
+
+# 25. D-3 알림 실제 발송 (dispatch) + 멱등성 확인
+r = client.post("/notifications/due-payments/dispatch", headers=landlord_headers)
+expect(r.status_code == 200, f"dispatch failed: {r.status_code} {r.text}")
+dispatched = r.json()
+expect(len(dispatched) == 1 and dispatched[0]["alert_type"] == "D-3", f"expected exactly one D-3 dispatch: {dispatched}")
+print("due-payment dispatch created system message OK")
+
+r = client.get(f"/contracts/{contract_id}/messages", headers=landlord_headers)
+after_dispatch = r.json()
+expect(len(after_dispatch) == 4, f"expected 4 messages after dispatch: {after_dispatch}")
+expect(after_dispatch[-1]["content"].startswith("[D-3]"), f"last message should be the D-3 alert: {after_dispatch[-1]}")
+print("D-3 alert message visible in chat timeline OK")
+
+# 25b. 같은 날 다시 dispatch 하면 중복 발송되지 않아야 함
+r = client.post("/notifications/due-payments/dispatch", headers=tenant_headers)
+expect(r.status_code == 200 and len(r.json()) == 0, f"dispatch should be idempotent same-day: {r.text}")
+
+r = client.get(f"/contracts/{contract_id}/messages", headers=landlord_headers)
+expect(len(r.json()) == 4, f"message count should not grow on repeated dispatch: {r.json()}")
+print("dispatch idempotency (no duplicate same-day alert) OK")
+
 print("\nALL SMOKE TESTS PASSED")

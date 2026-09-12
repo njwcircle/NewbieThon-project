@@ -2,7 +2,16 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models import ContractStatus, IssueCategory, IssueStatus, PaymentStatus, PaymentType, Responsible, Role
+from .models import (
+    ChatMessageType,
+    ContractStatus,
+    IssueCategory,
+    IssueStatus,
+    PaymentStatus,
+    PaymentType,
+    Responsible,
+    Role,
+)
 
 
 class LandlordSignupRequest(BaseModel):
@@ -241,3 +250,17 @@ class DuePaymentAlertResponse(BaseModel):
     amount: int
     type: PaymentType
     alert_type: str
+
+
+class ChatMessageCreateRequest(BaseModel):
+    content: str = Field(min_length=1)
+
+
+class ChatMessageResponse(BaseModel):
+    id: str
+    type: ChatMessageType
+    sender_id: str | None = None
+    sender_name: str | None = None
+    content: str
+    ref_id: str | None = None
+    created_at: datetime

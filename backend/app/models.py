@@ -73,6 +73,12 @@ class IssueStatus(str, enum.Enum):
     RESOLVED = "RESOLVED"
 
 
+class ChatMessageType(str, enum.Enum):
+    TEXT = "TEXT"
+    SYSTEM_ISSUE = "SYSTEM_ISSUE"
+    SYSTEM_PAYMENT = "SYSTEM_PAYMENT"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -196,3 +202,25 @@ class NotificationSettings(Base):
     payment_alert = Column(Boolean, nullable=False, default=True)
     issue_alert = Column(Boolean, nullable=False, default=True)
     chat_alert = Column(Boolean, nullable=False, default=True)
+
+
+class ChatRoom(Base):
+    __tablename__ = "chat_rooms"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    contract_id = Column(String, ForeignKey("contracts.id"), unique=True, nullable=False)
+    archived_at = Column(DateTime, nullable=True)
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    chat_room_id = Column(String, ForeignKey("chat_rooms.id"), nullable=False)
+    sender_id = Column(String, ForeignKey("users.id"), nullable=True)
+    type = Column(SAEnum(ChatMessageType), nullable=False, default=ChatMessageType.TEXT)
+    content = Column(String, nullable=False)
+    ref_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    sender = relationship("User")
