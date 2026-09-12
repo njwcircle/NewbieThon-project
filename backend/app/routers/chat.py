@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
-from ..chat_service import get_or_create_room
+from ..chat_service import get_or_create_room, post_text_message
 from ..deps import get_current_user, get_db
 
 router = APIRouter(prefix="/contracts/{contract_id}/messages", tags=["chat"])
@@ -59,15 +59,5 @@ def send_message(
     current_user: models.User = Depends(get_current_user),
 ):
     contract = _get_accessible_contract(contract_id, current_user, db)
-    room = get_or_create_room(db, contract.id)
-
-    message = models.ChatMessage(
-        chat_room_id=room.id,
-        sender_id=current_user.id,
-        type=models.ChatMessageType.TEXT,
-        content=payload.content,
-    )
-    db.add(message)
-    db.commit()
-    db.refresh(message)
+    message = post_text_message(db, contract, current_user, payload.content)
     return _to_response(message)

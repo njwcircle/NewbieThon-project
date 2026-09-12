@@ -264,3 +264,16 @@ class ChatMessageResponse(BaseModel):
     content: str
     ref_id: str | None = None
     created_at: datetime
+
+
+class DeviceTokenRegisterRequest(BaseModel):
+    token: str = Field(min_length=1)
+    platform: str | None = None
+
+
+class DeviceTokenResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    token: str
+    platform: str | None = None

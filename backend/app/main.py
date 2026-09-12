@@ -10,6 +10,7 @@ from .routers import (
     contracts,
     dashboard,
     profile,
+    push,
     repair_vendors,
     units,
 )
@@ -28,6 +29,7 @@ app.include_router(repair_vendors.router)
 app.include_router(agreements.router)
 app.include_router(dashboard.router)
 app.include_router(chat.router)
+app.include_router(push.router)
 
 
 @app.get("/health")

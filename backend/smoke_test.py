@@ -422,4 +422,46 @@ r = client.get(f"/contracts/{contract_id}/messages", headers=landlord_headers)
 expect(len(r.json()) == 4, f"message count should not grow on repeated dispatch: {r.json()}")
 print("dispatch idempotency (no duplicate same-day alert) OK")
 
+# --- FCM 디바이스 토큰 (Firebase 미설정 상태에서도 나머지 흐름이 안 깨지는지 확인) ---
+
+# 26. 디바이스 토큰 등록 (임차인)
+r = client.post(
+    "/users/me/device-tokens",
+    json={"token": "fcm-token-tenant-1", "platform": "android"},
+    headers=tenant_headers,
+)
+expect(r.status_code == 201, f"register device token failed: {r.status_code} {r.text}")
+print("device token register OK")
+
+r = client.get("/users/me/device-tokens", headers=tenant_headers)
+expect(r.status_code == 200 and len(r.json()) == 1, f"list device tokens failed: {r.text}")
+print("device token list OK")
+
+# 26b. 같은 토큰을 다른 사용자가 등록하면 소유자가 갱신됨(기기 재로그인 시나리오)
+r = client.post(
+    "/users/me/device-tokens",
+    json={"token": "fcm-token-tenant-1", "platform": "android"},
+    headers=landlord_headers,
+)
+expect(r.status_code == 201, f"re-register device token failed: {r.text}")
+
+r = client.get("/users/me/device-tokens", headers=tenant_headers)
+expect(len(r.json()) == 0, f"token should have moved to the new owner: {r.json()}")
+r = client.get("/users/me/device-tokens", headers=landlord_headers)
+expect(len(r.json()) == 1, f"landlord should now own the token: {r.json()}")
+print("device token re-registration (ownership transfer) OK")
+
+# 27. 토큰이 등록된 상태로 메시지를 보내도(Firebase 미설정) 죽지 않고 정상 처리되는지
+r = client.post(f"/contracts/{contract_id}/messages", json={"content": "푸시 테스트 메시지"}, headers=tenant_headers)
+expect(r.status_code == 201, f"send message with registered token failed: {r.status_code} {r.text}")
+print("send message with device token registered (FCM unset, no crash) OK")
+
+# 28. 디바이스 토큰 해제
+r = client.delete("/users/me/device-tokens/fcm-token-tenant-1", headers=landlord_headers)
+expect(r.status_code == 204, f"unregister device token failed: {r.status_code} {r.text}")
+
+r = client.delete("/users/me/device-tokens/no-such-token", headers=landlord_headers)
+expect(r.status_code == 404, f"unregistering nonexistent token should 404: {r.status_code} {r.text}")
+print("device token unregister OK")
+
 print("\nALL SMOKE TESTS PASSED")

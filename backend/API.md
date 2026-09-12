@@ -92,3 +92,15 @@
 - `sender_id`가 `null`이면 시스템 메시지 → 프론트에서 말풍선 대신 카드/배너 UI로 렌더링
 - `type: "SYSTEM_ISSUE"`인 메시지는 `ref_id`가 `issue_reports.id`를 가리킴 → 그 id로 `GET /contracts/{contract_id}/issues` 결과에서 찾아서 "문제 카드"로 표시
 - 날짜 구분선("──── 9월 12일 ────")은 `created_at` 날짜가 바뀔 때 프론트에서 그리면 됨(백엔드는 타임스탬프만 줌)
+
+## 6. FCM 푸시
+
+| Method | Path | 권한 | Body | 응답 |
+|---|---|---|---|---|
+| POST | `/users/me/device-tokens` | 로그인 | `{token, platform?}` | `{id, token, platform}` — 앱 로그인 직후/토큰 갱신 시 호출 |
+| GET | `/users/me/device-tokens` | 로그인 | - | `[{id, token, platform}]` |
+| DELETE | `/users/me/device-tokens/{token}` | 로그인 | - | 204 — 로그아웃 시 호출 |
+
+- 채팅 메시지(일반/시스템)가 발생할 때마다 상대방에게 자동으로 푸시가 나가요. 프론트는 토큰 등록/해제만 신경 쓰면 되고, "언제 보낼지"는 백엔드가 알아서 처리.
+- 각 사용자의 `notification_settings`(`payment_alert`/`issue_alert`/`chat_alert`)가 꺼져있으면 그 사람에겐 안 감.
+- 로컬 개발 중엔 Firebase 프로젝트가 없어도 에러 없이 그냥 스킵되니, 프론트 개발 중엔 폰에 실제로 알림이 안 와도 정상입니다 (서버 로그에 `[FCM skip] ...`만 찍힘).

@@ -224,3 +224,13 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     sender = relationship("User")
+
+
+class DeviceToken(Base):
+    __tablename__ = "device_tokens"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    token = Column(String, nullable=False, unique=True)
+    platform = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

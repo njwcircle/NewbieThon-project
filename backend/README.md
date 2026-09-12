@@ -1,6 +1,6 @@
-# Backend (로그인 · 프로필 · 대시보드 · 채팅)
+# Backend (로그인 · 프로필 · 대시보드 · 채팅 · FCM)
 
-FastAPI + SQLite. 임대인/임차인 로그인, 건물/호실/계약, 초대코드, 프로필(지난 계약·비번수정·알림설정), 대시보드(건물별 보드·사전합의사항·수리업체·납부알림), 채팅(계약별 1:1 채팅방 + 시스템 메시지) 흐름을 구현.
+FastAPI + SQLite. 임대인/임차인 로그인, 건물/호실/계약, 초대코드, 프로필(지난 계약·비번수정·알림설정), 대시보드(건물별 보드·사전합의사항·수리업체·납부알림), 채팅(계약별 1:1 채팅방 + 시스템 메시지), FCM 푸시(디바이스 토큰 등록 + 채팅 이벤트 발송) 흐름을 구현.
 
 ## 실행 방법
 
@@ -58,11 +58,22 @@ uvicorn app.main:app --reload
   - `POST /notifications/due-payments/dispatch` — 시스템 전체의 D-3/D-day/연체 대상을 훑어서 각 계약 채팅방에 "OO월 OO 납부일이 3일 남았습니다" 류 메시지를 실제로 남김. 같은 결제건+알림종류는 하루에 한 번만 남기도록 멱등 처리(당일 채팅 메시지 존재 여부로 체크)
   - **문제접수 기능에서 재사용할 것**: [app/chat_service.py](app/chat_service.py)의 `post_system_message(db, contract_id, ChatMessageType.SYSTEM_ISSUE, "...", ref_id=issue.id)`를 그대로 import해서 호출하면 됨(같은 프로세스라 HTTP 안 거치고 바로 함수 호출). 신고 접수/상태 변경 시 이걸 불러서 "에어컨 문제가 접수되었습니다", "처리 상태가 'OOO'으로 변경되었습니다" 같은 메시지를 남기면 된다. `SYSTEM_ISSUE` 타입 메시지의 `ref_id`는 `issue_reports.id`를 가리키므로, 프론트는 그 id로 `GET /contracts/{id}/issues`에서 상세를 가져와 "문제 카드"로 렌더링.
 
-**한계**: `dispatch` 엔드포인트는 원래 하루 한 번 도는 스케줄러(cron)가 호출해야 하는데, 그 스케줄러 자체와 실제 휴대폰 푸시(FCM)/카카오 알림톡 발송은 이 세션에서 만들지 않았다. 지금은 로그인한 사용자 누구나 호출 가능한 임시 상태이고, 실제 배포 시엔 사용자 토큰이 아니라 전용 서비스 자격 증명으로 바꿔야 한다.
+**한계**: `dispatch` 엔드포인트는 원래 하루 한 번 도는 스케줄러(cron)가 호출해야 하는데, 그 스케줄러 자체는 이 세션에서 만들지 않았다. 지금은 로그인한 사용자 누구나 호출 가능한 임시 상태이고, 실제 배포 시엔 사용자 토큰이 아니라 전용 서비스 자격 증명으로 바꿔야 한다. (실제 폰 푸시 발송 자체는 아래 FCM 섹션에서 구현됨.)
+
+### FCM 푸시
+
+- 디바이스 토큰 등록: `POST /users/me/device-tokens` (body: `{token, platform?}`) — 앱이 로그인 직후 또는 토큰 갱신 시 호출. 같은 토큰이 이미 등록돼 있으면 소유자를 현재 로그인 사용자로 갱신(기기 재설치/다른 계정 로그인 대응)
+- 내 디바이스 토큰 목록: `GET /users/me/device-tokens`
+- 디바이스 토큰 해제: `DELETE /users/me/device-tokens/{token}` — 로그아웃 시 호출
+- 발송 트리거 지점(전부 [app/chat_service.py](app/chat_service.py) 경유):
+  - 시스템 메시지가 남을 때(`post_system_message`) → 그 계약의 임대인+임차인 양쪽에게 푸시
+  - 일반 텍스트 메시지를 보낼 때(`post_text_message`) → 보낸 사람 제외한 상대방에게 푸시
+  - 발송 전 `notification_settings`(`payment_alert`/`issue_alert`/`chat_alert`)를 확인해서 꺼져있으면 그 사람에겐 안 보냄
+- 실제 발송은 [app/push_service.py](app/push_service.py)가 담당. **`FIREBASE_CREDENTIALS_PATH` 환경변수가 없으면 실제 발송 없이 로그만 남기고 조용히 스킵** — Firebase 프로젝트 없이도 로컬 개발/스모크 테스트가 깨지지 않게 하려는 설계. 실제 배포 시 Firebase 콘솔 > 프로젝트 설정 > 서비스 계정에서 발급받은 JSON 파일 경로를 `.env`에 설정하면 그때부터 실제로 나감.
 
 ## 스키마
 
-`users` / `buildings` / `units` / `contracts` / `invite_codes` / `payments` / `issue_reports` / `notification_settings` / `repair_vendors` / `prior_agreements` / `chat_rooms` / `chat_messages` 12개 테이블. 관계는 루트 [README.md](../README.md)의 데이터 인터페이스 문서 및 대화 내 스키마 설계 참고.
+`users` / `buildings` / `units` / `contracts` / `invite_codes` / `payments` / `issue_reports` / `notification_settings` / `repair_vendors` / `prior_agreements` / `chat_rooms` / `chat_messages` / `device_tokens` 13개 테이블. 관계는 루트 [README.md](../README.md)의 데이터 인터페이스 문서 및 대화 내 스키마 설계 참고.
 
 - `units`는 물리적 호실(건물+동+호 유일), `contracts`가 계약(기간+임대인+임차인) 단위 — 같은 호실도 계약이 바뀌면 새 `contracts` row가 생성되어 이전 임차인 데이터와 분리됨.
 - 초대코드는 계약 1건당 발급, 1회용(`used_at`), 7일 만료(`expires_at`).
@@ -81,4 +92,4 @@ uvicorn app.main:app --reload
 python smoke_test.py
 ```
 
-가입→건물/호실/계약 생성→초대코드→임차인가입→로그인, 프로필(지난 계약 조회, 계약 상세, 납부 기록, 문제접수 기록 조회, 비번 수정, 알림설정), 대시보드(수리업체 등록, 사전합의사항, 계약별 수리업체 배정, 건물/내 보드 조회, 납부확인 체크, D-3 알림 감지), 채팅(채팅방 자동생성, 납부확인 시 시스템 메시지 자동 게시, 일반 메시지 송수신, D-3 알림 실제 발송과 멱등성)까지 전체 플로우와 주요 실패 케이스(중복 호실, 재사용 초대코드, 오답 비밀번호, 권한 없는 접근, 제3자 계약/채팅 조회 차단, 임차인의 쓰기 권한 없는 엔드포인트 접근 차단)를 한번에 검증.
+가입→건물/호실/계약 생성→초대코드→임차인가입→로그인, 프로필(지난 계약 조회, 계약 상세, 납부 기록, 문제접수 기록 조회, 비번 수정, 알림설정), 대시보드(수리업체 등록, 사전합의사항, 계약별 수리업체 배정, 건물/내 보드 조회, 납부확인 체크, D-3 알림 감지), 채팅(채팅방 자동생성, 납부확인 시 시스템 메시지 자동 게시, 일반 메시지 송수신, D-3 알림 실제 발송과 멱등성), FCM(디바이스 토큰 등록/소유권 이전/해제, Firebase 미설정 상태에서 메시지 발송이 죽지 않는지)까지 전체 플로우와 주요 실패 케이스(중복 호실, 재사용 초대코드, 오답 비밀번호, 권한 없는 접근, 제3자 계약/채팅 조회 차단, 임차인의 쓰기 권한 없는 엔드포인트 접근 차단)를 한번에 검증.
