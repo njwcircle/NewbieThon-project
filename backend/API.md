@@ -30,10 +30,13 @@
 | Method | Path | 권한 | Body | 응답 |
 |---|---|---|---|---|
 | POST | `/auth/signup/landlord` | 없음 | `{name, phone, password}` | `{access_token, token_type, role}` |
-| POST | `/auth/signup/tenant` | 없음 | `{invite_code, name, phone, password}` | `{access_token, token_type, role}` |
+| POST | `/auth/signup/tenant` | 없음 | `{name, phone, password}` | `{access_token, token_type, role}` — 초대코드 없이 일반 가입 |
 | POST | `/auth/login` | 없음 | `{phone, password}` | `{access_token, token_type, role}` |
 | GET | `/auth/me` | 로그인 | - | `{id, role, name, phone}` |
 | PATCH | `/auth/password` | 로그인 | `{current_password, new_password}` | 204 |
+| POST | `/auth/redeem-invite-code` | 임차인 | `{invite_code}` | `{id, building_name, dong, ho, start_date, end_date, status}` — 로그인한 임차인 계정을 해당 계약에 연결. **같은 계정으로 여러 번 호출 가능** — 재계약/이사 시 두 번째 계약도 같은 계정에 연결됨 |
+
+가입과 계약 연결이 분리되어 있다: 임차인은 먼저 `signup/tenant`로 계정만 만들고, 로그인 후 `redeem-invite-code`로 원하는 시점에 계약을 연결한다. 한 계정이 여러 계약을 순차적으로 가질 수 있고, 그게 곧 "지난 계약" 목록이다.
 
 ## 2. 건물 / 호실 / 계약 / 초대코드
 

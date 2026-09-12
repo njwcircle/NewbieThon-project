@@ -25,10 +25,13 @@ class LandlordSignupRequest(BaseModel):
 
 
 class TenantSignupRequest(BaseModel):
-    invite_code: str
     name: str
     phone: str
     password: str = Field(min_length=8)
+
+
+class RedeemInviteCodeRequest(BaseModel):
+    invite_code: str
 
 
 class LoginRequest(BaseModel):
