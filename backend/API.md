@@ -55,7 +55,6 @@
 | GET | `/contracts/{contract_id}` | 계약 당사자 | - | `{id, building_name, address, dong, ho, rent_amount, maintenance_fee_fixed, start_date, end_date, status}` |
 | GET | `/contracts/{contract_id}/payments` | 계약 당사자 | - | `[{id, type, due_date, amount, status, paid_at}]` |
 | POST | `/contracts/{contract_id}/payments` | 임대인 | `{type, due_date, amount}` | `{id, type, due_date, amount, status, paid_at}` |
-| GET | `/contracts/{contract_id}/issues` | 계약 당사자 | - | `[{id, category, description, status, responsible, created_at, resolved_at}]` — **읽기 전용**, 생성 API는 문제접수 기능에서 별도 추가 예정 |
 | GET | `/users/me/notification-settings` | 로그인 | - | `{payment_alert, issue_alert, chat_alert}` |
 | PUT | `/users/me/notification-settings` | 로그인 | `{payment_alert, issue_alert, chat_alert}` | 위와 동일 |
 
@@ -104,3 +103,32 @@
 - 채팅 메시지(일반/시스템)가 발생할 때마다 상대방에게 자동으로 푸시가 나가요. 프론트는 토큰 등록/해제만 신경 쓰면 되고, "언제 보낼지"는 백엔드가 알아서 처리.
 - 각 사용자의 `notification_settings`(`payment_alert`/`issue_alert`/`chat_alert`)가 꺼져있으면 그 사람에겐 안 감.
 - 로컬 개발 중엔 Firebase 프로젝트가 없어도 에러 없이 그냥 스킵되니, 프론트 개발 중엔 폰에 실제로 알림이 안 와도 정상입니다 (서버 로그에 `[FCM skip] ...`만 찍힘).
+
+## 7. 문제접수
+
+| Method | Path | 권한 | Body | 응답 |
+|---|---|---|---|---|
+| POST | `/contracts/{contract_id}/issues` | 계약 당사자 | `{category, description, photo_url?}` | `{issue: IssueReportResponse, agreement_matched, agreement_note, next_action}` |
+| GET | `/contracts/{contract_id}/issues` | 계약 당사자 | - | `[IssueReportResponse]` |
+| GET | `/contracts/{contract_id}/issues/{issue_id}` | 계약 당사자 | - | `IssueReportResponse` |
+| PATCH | `/contracts/{contract_id}/issues/{issue_id}/status` | 임대인 | `{status}` | `IssueReportResponse` |
+| POST | `/contracts/{contract_id}/issues/{issue_id}/resolve` | 계약 당사자 | `{resolver, resolved_detail, cost, payer, payment_status, receipt_image_url?}` | `IssueReportResponse` (`status`가 `RESOLVED`로 바뀜) |
+| POST | `/uploads/issues` | 없음 | multipart `file` | `{url}` — jpg/png/webp/gif, 최대 10MB |
+| POST | `/uploads/receipts` | 없음 | multipart `file` | `{url}` |
+
+**IssueReportResponse**: `{id, contract_id, category, description, photo_url, status, responsible, resolver, resolved_detail, cost, payer, payment_status, receipt_image_url, created_at, resolved_at}`
+
+- 접수 시 같은 카테고리의 사전합의사항이 있으면 자동으로 그 `responsible`을 적용(`agreement_matched: true`, `next_action: "FOLLOW_AGREEMENT"`), 없으면 `responsible: "UNDEFINED"`/`status: "IN_CHAT"`으로 접수되고 채팅으로 넘어감(`next_action: "OPEN_CHAT"`)
+- 업로드는 인증 없이 호출 가능 — 반환된 `url`을 그대로 `photo_url`/`receipt_image_url`에 넣으면 됨. 실제 이미지는 `<base>{url}`로 바로 접근 가능(정적 서빙)
+- 접수/상태변경/해결마다 해당 계약 채팅방에 `SYSTEM_ISSUE` 시스템 메시지가 자동으로 남음 — 4번(채팅) 섹션과 동일하게 `ref_id`가 `issue_reports.id`를 가리킴
+
+## 8. 법률에이전트
+
+| Method | Path | 권한 | Body | 응답 |
+|---|---|---|---|---|
+| POST | `/contracts/{contract_id}/legal-advice` | 계약 당사자 | `{category, custom_category?, question}` | `{category, answer, contract_id, referenced_issue_ids, referenced_agreement_ids, disclaimer}` |
+
+- `category`: `RENT`/`DEPOSIT`/`REPAIR_COST`/`CONTRACT`/`DEFECT`/`EVICTION`/`ETC`
+- 백엔드가 해당 계약의 사전합의사항 + 최근 문제접수 기록을 모아서 LLM(기본 Google Gemini, 환경변수로 교체 가능)에 같이 전달 → 답변이 실제 계약 데이터를 참고함
+- **`LEGAL_LLM_API_KEY`/`LEGAL_LLM_MODEL`이 서버에 설정 안 돼 있으면 503** — 프론트는 이 경우 "법률 상담 기능 준비 중"처럼 안내하고 나머지 화면은 그대로 쓰면 됨
+- `answer`는 항상 disclaimer 포함, 법적 결론을 단정하지 않고 "확인이 필요하다" 식으로 안내하도록 프롬프트가 설계돼 있음

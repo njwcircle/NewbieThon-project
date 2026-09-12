@@ -7,3 +7,5 @@ PyJWT>=2.8
 firebase-admin>=6.5
 python-dotenv>=1.0
 pydantic>=2.6
+python-multipart>=0.0.9
+openai>=1.0

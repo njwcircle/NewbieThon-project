@@ -79,6 +79,23 @@ class ChatMessageType(str, enum.Enum):
     SYSTEM_PAYMENT = "SYSTEM_PAYMENT"
 
 
+class ResolutionActor(str, enum.Enum):
+    LANDLORD = "LANDLORD"
+    TENANT = "TENANT"
+    REPAIR_VENDOR = "REPAIR_VENDOR"
+
+
+class CostBearer(str, enum.Enum):
+    LANDLORD = "LANDLORD"
+    TENANT = "TENANT"
+    SHARED = "SHARED"
+
+
+class IssuePaymentStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    PAID = "PAID"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -190,7 +207,12 @@ class IssueReport(Base):
     photo_url = Column(String, nullable=True)
     status = Column(SAEnum(IssueStatus), nullable=False, default=IssueStatus.RECEIVED)
     responsible = Column(SAEnum(Responsible), nullable=False, default=Responsible.UNDEFINED)
+    resolver = Column(SAEnum(ResolutionActor), nullable=True)
     resolved_detail = Column(String, nullable=True)
+    cost = Column(Integer, nullable=True)
+    payer = Column(SAEnum(CostBearer), nullable=True)
+    payment_status = Column(SAEnum(IssuePaymentStatus), nullable=True)
+    receipt_image_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     resolved_at = Column(DateTime, nullable=True)
 

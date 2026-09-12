@@ -4,3 +4,7 @@ __pycache__/
 *.db
 .env
 *firebase-adminsdk*.json
+uploads/issues/*
+uploads/receipts/*
+!uploads/issues/.gitkeep
+!uploads/receipts/.gitkeep

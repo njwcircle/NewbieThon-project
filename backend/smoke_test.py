@@ -464,4 +464,116 @@ r = client.delete("/users/me/device-tokens/no-such-token", headers=landlord_head
 expect(r.status_code == 404, f"unregistering nonexistent token should 404: {r.status_code} {r.text}")
 print("device token unregister OK")
 
+# --- 문제접수 + 법률에이전트 (팀원 기능, dd 브랜치 통합분) ---
+
+# 29. 사전합의 있는 카테고리로 접수 -> 자동으로 사전합의 기준 적용(agreement_matched=True)
+r = client.post(
+    f"/contracts/{contract_id}/issues",
+    json={"category": "BOILER", "description": "보일러가 또 고장났어요"},
+    headers=tenant_headers,
+)
+expect(r.status_code == 201, f"create issue (agreement matched) failed: {r.status_code} {r.text}")
+data = r.json()
+expect(data["agreement_matched"] is True, f"expected agreement_matched=True: {data}")
+expect(data["issue"]["responsible"] == "LANDLORD", f"expected responsible from agreement: {data}")
+issue_id_matched = data["issue"]["id"]
+print("issue create (agreement matched) OK")
+
+# 29b. 사전합의 없는 카테고리는 채팅으로 넘어감(agreement_matched=False, IN_CHAT)
+r = client.post(
+    f"/contracts/{contract_id}/issues",
+    json={"category": "FURNITURE", "description": "가구가 파손됐어요"},
+    headers=tenant_headers,
+)
+expect(r.status_code == 201, f"create issue (no agreement) failed: {r.status_code} {r.text}")
+data = r.json()
+expect(
+    data["agreement_matched"] is False and data["issue"]["status"] == "IN_CHAT",
+    f"expected no-agreement/IN_CHAT: {data}",
+)
+issue_id_unmatched = data["issue"]["id"]
+print("issue create (no agreement -> chat) OK")
+
+# 29c. 제3자는 접수 불가
+r = client.post(
+    f"/contracts/{contract_id}/issues",
+    json={"category": "WATER", "description": "몰래 접수"},
+    headers=stranger_headers,
+)
+expect(r.status_code == 403, f"stranger should not create issue: {r.status_code} {r.text}")
+print("stranger forbidden from issue create OK")
+
+# 30. 목록/단건 조회 (14번에서 DB에 직접 심어둔 테스트용 IssueReport 1건이 이미 있으므로 총 3건)
+r = client.get(f"/contracts/{contract_id}/issues", headers=landlord_headers)
+expect(r.status_code == 200 and len(r.json()) == 3, f"issue list failed: {r.status_code} {r.text}")
+print("issue list OK")
+
+r = client.get(f"/contracts/{contract_id}/issues/{issue_id_matched}", headers=tenant_headers)
+expect(r.status_code == 200, f"issue detail failed: {r.status_code} {r.text}")
+print("issue detail OK")
+
+# 31. 상태 변경 (임대인만) + 시스템 메시지 확인
+r = client.patch(
+    f"/contracts/{contract_id}/issues/{issue_id_matched}/status",
+    json={"status": "AUTO_RESOLVED"},
+    headers=tenant_headers,
+)
+expect(r.status_code == 403, f"tenant should not update issue status: {r.status_code} {r.text}")
+
+r = client.patch(
+    f"/contracts/{contract_id}/issues/{issue_id_matched}/status",
+    json={"status": "AUTO_RESOLVED"},
+    headers=landlord_headers,
+)
+expect(r.status_code == 200 and r.json()["status"] == "AUTO_RESOLVED", f"issue status update failed: {r.text}")
+print("issue status update (landlord only) OK")
+
+# 32. 해결 처리 (비용/부담주체 기록)
+r = client.post(
+    f"/contracts/{contract_id}/issues/{issue_id_matched}/resolve",
+    json={
+        "resolver": "REPAIR_VENDOR",
+        "resolved_detail": "고려보일러 출동해서 부품 교체",
+        "cost": 80000,
+        "payer": "LANDLORD",
+        "payment_status": "PAID",
+    },
+    headers=landlord_headers,
+)
+expect(r.status_code == 200 and r.json()["status"] == "RESOLVED", f"issue resolve failed: {r.status_code} {r.text}")
+print("issue resolve OK")
+
+# 33. 채팅에 문제접수 관련 시스템 메시지들이 실제로 남았는지 확인
+r = client.get(f"/contracts/{contract_id}/messages", headers=landlord_headers)
+issue_system_messages = [m for m in r.json() if m["type"] == "SYSTEM_ISSUE"]
+expect(
+    len(issue_system_messages) >= 3,
+    f"expected at least 3 SYSTEM_ISSUE messages (created x2, status, resolve): {issue_system_messages}",
+)
+print(f"SYSTEM_ISSUE chat messages present OK ({len(issue_system_messages)}건)")
+
+# 34. 법률 에이전트: 키 설정 여부에 따라 실제 호출 또는 503 graceful degradation을 검증
+r = client.post(
+    f"/contracts/{contract_id}/legal-advice",
+    json={"category": "REPAIR_COST", "question": "보일러 수리비는 누가 내야 하나요?"},
+    headers=tenant_headers,
+)
+if os.getenv("LEGAL_LLM_API_KEY"):
+    expect(r.status_code == 200, f"legal-advice with real API key failed: {r.status_code} {r.text}")
+    data = r.json()
+    expect(len(data["answer"]) > 0, f"empty legal-advice answer: {data}")
+    expect("법률 자문" in data["disclaimer"] or "법률자문" in data["disclaimer"], f"disclaimer missing: {data}")
+    print(f"legal-advice real call OK (answer {len(data['answer'])}자)")
+else:
+    expect(r.status_code == 503, f"legal-advice without API key should 503: {r.status_code} {r.text}")
+    print("legal-advice gracefully 503s without LEGAL_LLM_API_KEY OK")
+
+r = client.post(
+    f"/contracts/{contract_id}/legal-advice",
+    json={"category": "REPAIR_COST", "question": "몰래 질문"},
+    headers=stranger_headers,
+)
+expect(r.status_code == 403, f"stranger should not access legal-advice: {r.status_code} {r.text}")
+print("stranger forbidden from legal-advice OK")
+
 print("\nALL SMOKE TESTS PASSED")
