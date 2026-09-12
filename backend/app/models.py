@@ -109,6 +109,16 @@ class Unit(Base):
     contracts = relationship("Contract", back_populates="unit")
 
 
+class RepairVendor(Base):
+    __tablename__ = "repair_vendors"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    building_id = Column(String, ForeignKey("buildings.id"), nullable=False)
+    category = Column(SAEnum(IssueCategory), nullable=False)
+    name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+
+
 class Contract(Base):
     __tablename__ = "contracts"
 
@@ -116,6 +126,7 @@ class Contract(Base):
     unit_id = Column(String, ForeignKey("units.id"), nullable=False)
     landlord_id = Column(String, ForeignKey("users.id"), nullable=False)
     tenant_id = Column(String, ForeignKey("users.id"), nullable=True)
+    assigned_vendor_id = Column(String, ForeignKey("repair_vendors.id"), nullable=True)
     rent_amount = Column(Integer, nullable=False)
     maintenance_fee_fixed = Column(Integer, nullable=False, default=0)
     start_date = Column(Date, nullable=False)
@@ -124,6 +135,20 @@ class Contract(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     unit = relationship("Unit", back_populates="contracts")
+    tenant = relationship("User", foreign_keys=[tenant_id])
+    assigned_vendor = relationship("RepairVendor")
+    payments = relationship("Payment", backref="contract")
+
+
+class PriorAgreement(Base):
+    __tablename__ = "prior_agreements"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    contract_id = Column(String, ForeignKey("contracts.id"), nullable=False)
+    category = Column(SAEnum(IssueCategory), nullable=False)
+    responsible = Column(SAEnum(Responsible), nullable=False)
+    note = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class InviteCode(Base):

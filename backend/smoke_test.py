@@ -1,6 +1,7 @@
 """One-off smoke test for the login/building/unit/contract flow. Not a permanent test file."""
 
 import os
+from datetime import date, timedelta
 
 os.environ["DATABASE_URL"] = "sqlite:///./smoke_test.db"
 
@@ -250,5 +251,116 @@ print("notification settings update OK")
 r = client.get("/users/me/notification-settings", headers=tenant_headers)
 expect(r.json()["payment_alert"] is False, f"notification settings not persisted: {r.text}")
 print("notification settings persisted OK")
+
+# --- 대시보드 기능 ---
+
+# 17. 수리업체 등록 (임대인만)
+r = client.post(
+    f"/buildings/{building_id}/repair-vendors",
+    json={"category": "BOILER", "name": "고려보일러", "phone": "021234567"},
+    headers=landlord_headers,
+)
+expect(r.status_code == 201, f"create vendor failed: {r.status_code} {r.text}")
+vendor_id = r.json()["id"]
+print("repair vendor create OK")
+
+r = client.post(
+    f"/buildings/{building_id}/repair-vendors",
+    json={"category": "BOILER", "name": "임차인이 등록 시도", "phone": "0000"},
+    headers=tenant_headers,
+)
+expect(r.status_code == 403, f"tenant should not create vendor: {r.status_code} {r.text}")
+print("tenant forbidden from vendor create OK")
+
+# 18. 사전합의사항 등록 (임대인만 작성, 계약 당사자는 조회 가능)
+r = client.post(
+    f"/contracts/{contract_id}/agreements",
+    json={"category": "BOILER", "responsible": "LANDLORD", "note": "노후 보일러는 임대인 부담"},
+    headers=landlord_headers,
+)
+expect(r.status_code == 201, f"create agreement failed: {r.status_code} {r.text}")
+agreement_id = r.json()["id"]
+print("prior agreement create OK")
+
+r = client.get(f"/contracts/{contract_id}/agreements", headers=tenant_headers)
+expect(r.status_code == 200 and len(r.json()) == 1, f"tenant agreement list failed: {r.text}")
+print("tenant agreement read OK")
+
+r = client.patch(
+    f"/contracts/{contract_id}/agreements/{agreement_id}",
+    json={"responsible": "TENANT", "note": "특약 수정"},
+    headers=tenant_headers,
+)
+expect(r.status_code == 403, f"tenant should not edit agreement: {r.status_code} {r.text}")
+print("tenant forbidden from agreement edit OK")
+
+# 19. 수리업체 배정 (계약에 연결, 계약ID 기준)
+r = client.patch(
+    f"/contracts/{contract_id}/vendor",
+    json={"vendor_id": vendor_id},
+    headers=landlord_headers,
+)
+expect(r.status_code == 200 and r.json()["assigned_vendor"]["name"] == "고려보일러", f"assign vendor failed: {r.text}")
+print("vendor assign OK")
+
+# 20. 건물 대시보드 보드 (임대인 뷰): 세입자명/월세/납부상태/계약기간/수리업체 확인
+r = client.get(f"/buildings/{building_id}/board", headers=landlord_headers)
+expect(r.status_code == 200, f"landlord board failed: {r.status_code} {r.text}")
+board = r.json()
+expect(len(board) == 1, f"board should have exactly 1 row: {board}")
+row = board[0]
+expect(row["tenant_name"] == "세입자", f"board tenant_name mismatch: {row}")
+expect(row["rent_amount"] == 500000, f"board rent mismatch: {row}")
+expect(row["payment_status"] == "OVERDUE", f"board payment status should be OVERDUE (due 2026-02-01 already past): {row}")
+expect(row["assigned_vendor"]["name"] == "고려보일러", f"board vendor mismatch: {row}")
+print("landlord board OK (rent payment shows OVERDUE before confirm)")
+
+# 20b. 임차인 뷰 (수정 불가 - PATCH 엔드포인트 자체가 require_landlord라 접근 자체가 막힘)
+r = client.get("/users/me/board", headers=tenant_headers)
+expect(r.status_code == 200 and len(r.json()) == 1, f"tenant board failed: {r.text}")
+print("tenant board (read-only) OK")
+
+r = client.patch(f"/contracts/{contract_id}/vendor", json={"vendor_id": None}, headers=tenant_headers)
+expect(r.status_code == 403, f"tenant should not reassign vendor: {r.status_code} {r.text}")
+print("tenant forbidden from vendor reassignment OK")
+
+# 21. 납부상태 확인 체크 (임대인이 입금 확인)
+r = client.get(f"/contracts/{contract_id}/payments", headers=landlord_headers)
+rent_payment_id = next(p["id"] for p in r.json() if p["type"] == "RENT")
+
+r = client.patch(f"/payments/{rent_payment_id}/confirm", headers=landlord_headers)
+expect(r.status_code == 200 and r.json()["status"] == "PAID", f"confirm payment failed: {r.text}")
+print("payment confirm OK")
+
+r = client.patch(f"/payments/{rent_payment_id}/confirm", headers=tenant_headers)
+expect(r.status_code == 403, f"tenant should not confirm payment: {r.status_code} {r.text}")
+print("tenant forbidden from payment confirm OK")
+
+r = client.get(f"/buildings/{building_id}/board", headers=landlord_headers)
+expect(r.json()[0]["payment_status"] == "PAID", f"board should reflect confirmed payment: {r.json()}")
+print("board reflects confirmed payment OK")
+
+# 22. D-3/D-day/연체 알림 대상 조회 (관리비 변동비를 정확히 D-3로 마감되게 추가)
+d3_due = (date.today() + timedelta(days=3)).isoformat()
+r = client.post(
+    f"/contracts/{contract_id}/payments",
+    json={"type": "MAINTENANCE_VARIABLE", "due_date": d3_due, "amount": 15000},
+    headers=landlord_headers,
+)
+expect(r.status_code == 201, f"create maintenance payment failed: {r.text}")
+
+r = client.get("/notifications/due-payments", headers=landlord_headers)
+expect(r.status_code == 200, f"due-payments alert failed: {r.status_code} {r.text}")
+alerts = r.json()
+expect(
+    len(alerts) == 1 and alerts[0]["alert_type"] == "D-3" and alerts[0]["amount"] == 15000,
+    f"expected exactly one D-3 alert for the maintenance payment: {alerts}",
+)
+print("due-payments D-3 alert detected OK")
+
+# 22b. 임차인 쪽에서 조회해도 같은 계약이라 동일한 알림이 보여야 함
+r = client.get("/notifications/due-payments", headers=tenant_headers)
+expect(r.status_code == 200 and len(r.json()) == 1, f"tenant due-payments alert failed: {r.text}")
+print("tenant sees same due-payments alert OK")
 
 print("\nALL SMOKE TESTS PASSED")
